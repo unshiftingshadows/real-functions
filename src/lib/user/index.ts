@@ -155,7 +155,7 @@ async function grantRealAdminRole(email: string): Promise<void> {
 }
 
 exports.addReal = functions.https.onCall((data, context) => {
-  if (context.auth.token.real !== true && data.email !== 'jacobeck09@gmail.com') {
+  if (context.auth.token.realAdmin !== true) {
     return {
       error: "Request not authorized"
     }
@@ -179,7 +179,7 @@ async function grantChurchAdminRole(email: string): Promise<void> {
 }
 
 exports.addAdmin = functions.https.onCall((data, context) => {
-  if (context.auth.token.real !== true) {
+  if (context.auth.token.realAdmin !== true) {
     return {
       error: "Request not authorized"
     }
