@@ -92,9 +92,11 @@ exports.addUser = functions.https.onRequest((request, response) => {
       console.error('not acceptable app type')
   }
 
+  const randompass = Math.random().toString(36).slice(-8);
+
   auth.createUser({
     email: request.body.email,
-    password: 'password',
+    password: randompass,
     emailVerified: true
   }).then((userRecord) => {
     firestore.collection('user').doc(userRecord.uid).set(newUser)
