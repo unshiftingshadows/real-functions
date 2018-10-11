@@ -10,20 +10,23 @@ function defaultContent (type: ContentTypes) {
     case 'series':
       return {
         createdBy: '',
-        dateAdded: new Date(),
-        dateModified: new Date(),
+        createdDate: new Date(),
+        modifiedBy: '',
+        modifiedDate: new Date(),
         mainIdea: '',
         tags: [],
         title: '',
-        users: [],
-        lastUser: ''
+        type: '',
+        users: []
       }
     case 'sermon':
       return {
+        archived: false,
         bibleRefs: [],
         createdBy: '',
-        dateAdded: new Date(),
-        dateModified: new Date(),
+        createdDate: new Date(),
+        modifiedBy: '',
+        modifiedDate: new Date(),
         mainIdea: '',
         prefs: {
           hook: true,
@@ -31,18 +34,20 @@ function defaultContent (type: ContentTypes) {
           prayer: true
         },
         sectionOrder: [],
+        seriesid: '',
         tags: [],
         template: '',
         title: '',
-        users: [],
-        lastUser: ''
+        users: []
       }
     case 'lesson':
       return {
+        archived: false,
         bibleRefs: [],
         createdBy: '',
-        dateAdded: new Date(),
-        dateModified: new Date(),
+        createdDate: new Date(),
+        modifiedBy: '',
+        modifiedDate: new Date(),
         mainIdea: '',
         prefs: {
           hook: true,
@@ -50,23 +55,23 @@ function defaultContent (type: ContentTypes) {
           prayer: true
         },
         sectionOrder: [],
+        seriesid: '',
         tags: [],
         template: '',
         title: '',
-        users: [],
-        lastUser: ''
+        users: []
       }
     case 'scratch':
       return {
-        createdBy: '',
         bibleRefs: [],
-        dateAdded: new Date(),
-        dateModified: new Date(),
+        createdBy: '',
+        createdDate: new Date(),
+        modifiedBy: '',
+        modifiedDate: new Date(),
         tags: [],
         text: '',
         title: '',
-        users: [],
-        lastUser: ''
+        users: []
       }
     default:
       return false
@@ -149,7 +154,6 @@ const defaultHook = {
   wordcount: 0,
   time: 0,
   editing: false,
-  show: true,
   moduleOrder: []
 }
 
@@ -161,8 +165,7 @@ const defaultApplication = {
   thought: '',
   wordcount: 0,
   time: 0,
-  editing: false,
-  show: true
+  editing: false
 }
 
 const defaultPrayer = {
@@ -170,8 +173,7 @@ const defaultPrayer = {
   text: '',
   wordcount: 0,
   time: 0,
-  editing: false,
-  show: true
+  editing: false
 }
 
 function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
