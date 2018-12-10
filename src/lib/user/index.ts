@@ -4,9 +4,9 @@ import { auth, firestore } from './../../db'
 const messageApp = {
   prefs: {
     contentType: {
-      lesson: true,
+      message: true,
       scratch: true,
-      sermon: true
+      series: true
     },
     mediaType: {
       illustration: true,
@@ -15,12 +15,7 @@ const messageApp = {
       quote: true,
       video: true
     },
-    sermonStructure: {
-      hook: true,
-      application: true,
-      prayer: true
-    },
-    lessonStructure: {
+    messageStructure: {
       hook: true,
       application: true,
       prayer: true
@@ -33,8 +28,7 @@ const messageApp = {
     speakingSpeed: 120
   },
   stats: {
-    numsermon: 0,
-    numlesson: 0,
+    nummessage: 0,
     numscratch: 0,
     numarchive: 0,
     numquote: 0,

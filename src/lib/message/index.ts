@@ -3,23 +3,26 @@ import { firestore } from './../../db'
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
 
-type ContentTypes = 'sermon' | 'lesson' | 'scratch' | 'series'
+type ContentTypes = 'message' | 'scratch' | 'series'
 
 function defaultContent (type: ContentTypes) {
   switch (type) {
     case 'series':
       return {
+        archived: false,
+        bibleRefs: [],
         createdBy: '',
         createdDate: new Date(),
         modifiedBy: '',
         modifiedDate: new Date(),
         mainIdea: '',
+        messageOrder: [],
         tags: [],
         title: '',
         type: '',
         users: []
       }
-    case 'sermon':
+    case 'message':
       return {
         archived: false,
         bibleRefs: [],
@@ -38,27 +41,7 @@ function defaultContent (type: ContentTypes) {
         tags: [],
         template: '',
         title: '',
-        users: []
-      }
-    case 'lesson':
-      return {
-        archived: false,
-        bibleRefs: [],
-        createdBy: '',
-        createdDate: new Date(),
-        modifiedBy: '',
-        modifiedDate: new Date(),
-        mainIdea: '',
-        prefs: {
-          hook: true,
-          application: true,
-          prayer: true
-        },
-        sectionOrder: [],
-        seriesid: '',
-        tags: [],
-        template: '',
-        title: '',
+        type: '',
         users: []
       }
     case 'scratch':
@@ -187,15 +170,20 @@ function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context
     contentObj.title = initData.title
     contentObj.createdBy = initData.createdBy
     contentObj.users = [initData.createdBy]
-    contentObj.prefs = initData.prefs
+    if (type === 'message') {
+      contentObj.prefs = initData.prefs
+      contentObj.seriesid = initData.seriesid || ''
+    }
     const batch = firestore.batch()
     if (initData.template !== '') {
       // Add template modules and sections to the batch commit
     }
     batch.set(contentRef, contentObj)
-    batch.set(contentRef.collection('structure').doc('hook'), defaultHook)
-    batch.set(contentRef.collection('structure').doc('application'), defaultApplication)
-    batch.set(contentRef.collection('structure').doc('prayer'), defaultPrayer)
+    if (type === 'message') {
+      batch.set(contentRef.collection('structure').doc('hook'), defaultHook)
+      batch.set(contentRef.collection('structure').doc('application'), defaultApplication)
+      batch.set(contentRef.collection('structure').doc('prayer'), defaultPrayer)
+    }
     return batch.commit()
   }
 
@@ -221,8 +209,7 @@ function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: 
 }
 
 exports.addSeries = functions.firestore.document('messageSeries/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'series') })
-exports.addLesson = functions.firestore.document('messageLesson/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'lesson') })
-exports.addSermon = functions.firestore.document('messageSermon/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'sermon') })
+exports.addMessage = functions.firestore.document('messageMessage/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'message') })
 exports.addScratch = functions.firestore.document('messageScratch/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'scratch') })
 exports.addQuote = functions.firestore.document('messageQuote/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'quote') })
 exports.addImage = functions.firestore.document('messageImage/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'image') })
@@ -243,8 +230,7 @@ function deleteContentHandler (snap, context, type) {
 }
 
 exports.removeSeries = functions.firestore.document('messageSeries/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'series') })
-exports.removeLesson = functions.firestore.document('messageLesson/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'lesson') })
-exports.removeSermon = functions.firestore.document('messageSermon/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'sermon') })
+exports.removeMessage = functions.firestore.document('messageMessage/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'message') })
 exports.removeScratch = functions.firestore.document('messageScratch/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'scratch') })
 
 function deleteCollection(db, collectionPath, batchSize) {
