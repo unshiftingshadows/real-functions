@@ -12,3 +12,6 @@ exports.message = require('./lib/message')
 
 // Bible Content functions
 exports.bible = require('./lib/bible')
+
+// NQ Content functions
+exports.nq = require('./lib/nq')

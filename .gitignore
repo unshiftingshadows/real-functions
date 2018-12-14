@@ -1,5 +1,7 @@
 .DS_Store
 .thumbs.db
+.gitignore
+*-cred.json
 node_modules
 /lib
 npm-debug.log*
