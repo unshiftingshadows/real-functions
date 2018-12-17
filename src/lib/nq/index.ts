@@ -51,7 +51,34 @@ exports.topic = functions.https.onCall(async (data, context) => {
 
     console.log('midResources', midResources)
 
-    return { topicData, joined: await topicData.map((e, index) => { return {...e, resources: midResources[index]} }) }
+    const joined = await topicData.map((e, index) => { return {...e, resources: midResources[index]} })
+
+    return { joined }
+  } else {
+    return false
+  }
+})
+
+exports.resource = functions.https.onCall(async (data, context) => {
+  const userRecord = await auth.getUser(context.auth.uid)
+  if ((userRecord.customClaims as any).realAdmin) {
+    const resourceList = data.resources
+
+    const resources = (await Promise.all(resourceList.map(e => {
+      return nqFirestore.collection(e.type + 's').doc(e.id).get()
+    }))).map(e => { return { ...(e as any).data(), id: (e as any).id } })
+
+    const mediaData = (await Promise.all(resources.map(async (e, index) => {
+      if (snippetTypes.indexOf(e.type) > -1) {
+        return await nqFirestore.collection(e.mediaType + 's').doc(e.mediaid).get()
+      } else {
+        return null
+      }
+    })))
+
+    return { resources: resources.map((e, index) => {
+      return snippetTypes.indexOf(e.type) > -1 ? {...e, media: mediaData[index]} : e
+    })}
   } else {
     return false
   }
