@@ -68,16 +68,20 @@ exports.resource = functions.https.onCall(async (data, context) => {
       return nqFirestore.collection(e.type + 's').doc(e.id).get()
     }))).map(e => { return { ...(e as any).data(), id: (e as any).id } })
 
+    console.log('resources', resources)
+
     const mediaData = (await Promise.all(resources.map(async (e, index) => {
-      if (snippetTypes.indexOf(e.type) > -1) {
+      if (snippetTypes.indexOf(resourceList[index].type) > -1) {
         return await nqFirestore.collection(e.mediaType + 's').doc(e.mediaid).get()
       } else {
         return null
       }
-    })))
+    }))).map(f => { return f !== null ? f.data() : {} })
+
+    console.log('mediaData', mediaData)
 
     return { resources: resources.map((e, index) => {
-      return snippetTypes.indexOf(e.type) > -1 ? {...e, media: mediaData[index]} : e
+      return { ...resourceList[index], media: snippetTypes.indexOf(resourceList[index].type) > -1 ? {...e, media: mediaData[index]} : e }
     })}
   } else {
     return false
