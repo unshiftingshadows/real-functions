@@ -114,7 +114,7 @@ exports.appAuth = functions.https.onCall((data, context) => {
     return auth.createCustomToken(uid).then((customToken) => {
       return { customToken: customToken, uid: uid, status: 'success' }
     }).catch((err) => {
-      return { err: err, status: 'error' }
+      return { err: err, uid: uid, status: 'error' }
     })
   } else {
     return { uid: uid, status: 'nouid' }
