@@ -8,7 +8,8 @@ const defaultDevo = {
   bibleRefs: [],
   notes: '',
   sectionOrder: [],
-  status: 'build'
+  status: 'build',
+  usedResources: []
 }
 
 const defaultGuide = {
