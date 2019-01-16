@@ -1,5 +1,26 @@
 import * as functions from 'firebase-functions';
-import { firestore } from './../../db';
+import { defaultApp as admin, firestore } from './../../db';
+
+const Sentry = require('@sentry/node')
+Sentry.init({
+  dsn: 'https://d3d741dcf97f43969ea1cb4416073960@sentry.io/1373107',
+  environment: JSON.parse(process.env.FIREBASE_CONFIG).projectId === 'real-45953' ? 'prod' : 'staging'
+})
+Sentry.configureScope(scope => {
+  scope.setTag('function', 'builder')
+})
+
+async function setSentryUser (context) {
+  const user = await admin.auth().getUser(context.auth.uid)
+  return Sentry.configureScope(scope => {
+    scope.setUser({
+      email: user.email,
+      id: context.auth.uid,
+      username: user.displayName,
+      ip_address: context.rawRequest.ip
+    })
+  })
+}
 
 const defaultDevo = {
   editing: false,
@@ -56,6 +77,7 @@ const defaultPrayer = {
 const guideTypes = [ 'lecture', 'discussion', 'question', 'answer', 'expositional' ]
 
 exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate((snap, context) => {
+  setSentryUser(context)
   const devosRef = snap.ref.collection('devos')
   const guidesRef = snap.ref.collection('guides')
   const reviewRef = snap.ref.collection('review')
@@ -90,9 +112,18 @@ exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/less
   reviewBatch.set(reviewRef.doc('review'), defaultReview)
 
   return Promise.all([devoBatch.commit(), guideBatch.commit(), reviewBatch.commit(), devoContentBatch.commit(), guideContentBatch.commit()])
+    .then(() => {
+      Sentry.addBreadcrumb({
+        category: 'builder',
+        message: `Cloud Function (addLesson) - lesson added successfully: ${snap.ref.id}`,
+        level: 'info'
+      })
+    })
+    .catch(err => { Sentry.captureException(err) })
 })
 
 exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete((snap, context) => {
+  setSentryUser(context)
   const paths = []
   // Devo collection paths
   for (let x = 1; x <= 7; x++) {
@@ -118,16 +149,22 @@ exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/l
 
   return Promise.all(paths.map((path) => {
     return deleteCollection(firestore, path, 10)
-  }))
+  })).then(() => {
+    Sentry.addBreadcrumb({
+      category: 'builder',
+      message: `Cloud Function (removeLesson) - lesson removed successfully: ${snap.ref.id}`,
+      level: 'info'
+    })
+  }).catch(err => { Sentry.captureException(err) })
 })
 
 function deleteCollection(db, collectionPath, batchSize) {
-  const collectionRef = db.collection(collectionPath);
-  const query = collectionRef.orderBy('__name__').limit(batchSize);
+  const collectionRef = db.collection(collectionPath)
+  const query = collectionRef.orderBy('__name__').limit(batchSize)
 
   return new Promise((resolve, reject) => {
-    deleteQueryBatch(db, query, batchSize, resolve, reject);
-  });
+    deleteQueryBatch(db, query, batchSize, resolve, reject)
+  }).catch(err => { Sentry.captureException(err) })
 }
 
 function deleteQueryBatch(db, query, batchSize, resolve, reject) {
@@ -135,29 +172,32 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
     .then((snapshot) => {
       // When there are no documents left, we are done
       if (snapshot.size === 0) {
-        return 0;
+        return 0
       }
 
       // Delete documents in a batch
       const batch = db.batch();
       snapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+        batch.delete(doc.ref)
+      })
 
       return batch.commit().then(() => {
         return snapshot.size;
-      });
+      })
     }).then((numDeleted) => {
       if (numDeleted === 0) {
-        resolve();
-        return;
+        resolve()
+        return
       }
 
       // Recurse on the next process tick, to avoid
       // exploding the stack.
       process.nextTick(() => {
         deleteQueryBatch(db, query, batchSize, resolve, reject);
-      });
+      })
     })
-    .catch(reject);
+    .catch(err => {
+      Sentry.captureException(err)
+      reject(err)
+    })
 }

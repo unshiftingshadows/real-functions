@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
 
-const defaultApp = admin.initializeApp(functions.config().firebase)
+export const defaultApp = admin.initializeApp(functions.config().firebase)
 const nqService = require('./../../notes-and-quotes-cred.json')
 
 const nqApp = admin.initializeApp({

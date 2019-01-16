@@ -11,11 +11,15 @@
   },
   "main": "lib/index.js",
   "dependencies": {
+    "@sendgrid/client": "^6.3.0",
+    "@sendgrid/mail": "^6.3.1",
+    "@sentry/node": "^4.5.2",
     "axios": "^0.18.0",
     "bible-passage-reference-parser": "^2.0.1",
     "firebase-admin": "~6.0.0",
     "firebase-functions": "^2.0.3",
-    "fuse.js": "^3.2.1"
+    "fuse.js": "^3.2.1",
+    "html-to-text": "^4.0.0"
   },
   "devDependencies": {
     "tslint": "~5.8.0",

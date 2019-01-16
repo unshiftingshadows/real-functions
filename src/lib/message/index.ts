@@ -1,7 +1,28 @@
 import * as functions from 'firebase-functions'
-import { firestore } from './../../db'
+import { defaultApp as admin, firestore } from './../../db'
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
+
+const Sentry = require('@sentry/node')
+Sentry.init({
+  dsn: 'https://d3d741dcf97f43969ea1cb4416073960@sentry.io/1373107',
+  environment: JSON.parse(process.env.FIREBASE_CONFIG).projectId === 'real-45953' ? 'prod' : 'staging'
+})
+Sentry.configureScope(scope => {
+  scope.setTag('function', 'message')
+})
+
+async function setSentryUser (context) {
+  const user = await admin.auth().getUser(context.auth.uid)
+  return Sentry.configureScope(scope => {
+    scope.setUser({
+      email: user.email,
+      id: context.auth.uid,
+      username: user.displayName,
+      ip_address: context.rawRequest.ip
+    })
+  })
+}
 
 type ContentTypes = 'message' | 'scratch' | 'series'
 
@@ -160,6 +181,7 @@ const defaultPrayer = {
 }
 
 function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
+  setSentryUser(context)
   const initData = snap.data()
   const contentRef = snap.ref
 
@@ -184,13 +206,20 @@ function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context
       batch.set(contentRef.collection('structure').doc('application'), defaultApplication)
       batch.set(contentRef.collection('structure').doc('prayer'), defaultPrayer)
     }
-    return batch.commit()
+    Sentry.addBreadcrumb({
+      category: 'message',
+      message: `Cloud Function (createContent) - ${type} content added successfully`,
+      level: 'info'
+    })
+    return batch.commit().catch(err => { Sentry.captureException(err) })
   }
 
+  Sentry.captureException(Error(`Cloud Function (createContent) - Unsupported content type ${type}`))
   return Promise.reject('Unsupported content type')
 }
 
 function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
+  setSentryUser(context)
   console.log(snap.data())
   const initData = snap.data()
   const mediaRef = snap.ref
@@ -202,9 +231,15 @@ function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: 
     Object.keys(initData).forEach((key) => {
       mediaObj[key] = initData[key]
     })
-    return mediaRef.set(mediaObj)
+    Sentry.addBreadcrumb({
+      category: 'message',
+      message: `Cloud Function (createMedia) - ${type} media added successfully`,
+      level: 'info'
+    })
+    return mediaRef.set(mediaObj).catch(err => { Sentry.captureException(err) })
   }
 
+  Sentry.captureException(Error(`Cloud Function (createMedia) - Unsupported media type ${type}`))
   return Promise.reject('Unsupported media type')  
 }
 
@@ -218,6 +253,7 @@ exports.addIllustration = functions.firestore.document('messageIllustration/{id}
 exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
 
 function deleteContentHandler (snap, context, type) {
+  setSentryUser(context)
   // All subcollection paths
   const paths = []
   paths.push(`${snap.ref.path}/structure`)
@@ -227,6 +263,14 @@ function deleteContentHandler (snap, context, type) {
   return Promise.all(paths.map((path) => {
     return deleteCollection(firestore, path, 10)
   }))
+  .then(() => {
+    return Sentry.addBreadcrumb({
+      category: 'message',
+      message: `Cloud Function (deleteContent) - ${type} content deleted successfully`,
+      level: 'info'
+    })
+  })
+  .catch(err => { Sentry.captureException(err) })
 }
 
 exports.removeSeries = functions.firestore.document('messageSeries/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'series') })
@@ -234,12 +278,12 @@ exports.removeMessage = functions.firestore.document('messageMessage/{id}').onDe
 exports.removeScratch = functions.firestore.document('messageScratch/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'scratch') })
 
 function deleteCollection(db, collectionPath, batchSize) {
-  const collectionRef = db.collection(collectionPath);
-  const query = collectionRef.orderBy('__name__').limit(batchSize);
+  const collectionRef = db.collection(collectionPath)
+  const query = collectionRef.orderBy('__name__').limit(batchSize)
 
   return new Promise((resolve, reject) => {
-    deleteQueryBatch(db, query, batchSize, resolve, reject);
-  });
+    deleteQueryBatch(db, query, batchSize, resolve, reject)
+  }).catch(err => { Sentry.captureException(err) })
 }
 
 function deleteQueryBatch(db, query, batchSize, resolve, reject) {
@@ -247,34 +291,37 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
     .then((snapshot) => {
       // When there are no documents left, we are done
       if (snapshot.size === 0) {
-        return 0;
+        return 0
       }
 
       // Delete documents in a batch
-      const batch = db.batch();
+      const batch = db.batch()
       snapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+        batch.delete(doc.ref)
+      })
 
       return batch.commit().then(() => {
-        return snapshot.size;
-      });
+        return snapshot.size
+      })
     }).then((numDeleted) => {
       if (numDeleted === 0) {
-        resolve();
-        return;
+        resolve()
+        return
       }
 
       // Recurse on the next process tick, to avoid
       // exploding the stack.
       process.nextTick(() => {
         deleteQueryBatch(db, query, batchSize, resolve, reject);
-      });
-    })
-    .catch(reject);
+      })
+    }).catch(err => {
+      Sentry.captureException(err)
+      reject(err)
+    }) 
 }
 
 exports.searchMedia = functions.https.onCall((data, context) => {
+  setSentryUser(context)
   const searchTerms = data.searchTerms
   const searchTypes = data.searchTypes
   const uid = context.auth.uid
@@ -315,9 +362,15 @@ exports.searchMedia = functions.https.onCall((data, context) => {
       })
     })
     const fuse = new Fuse(media, searchOptions)
+    Sentry.addBreadcrumb({
+      category: 'message',
+      message: `Cloud Function (searchMedia) - search successful: ${searchTerms}`,
+      level: 'info'
+    })
     return { searchTerms: searchTerms, searchTypes: searchTypes, uid: uid, results: fuse.search(searchTerms) }
   })
   .catch((err) => {
+    Sentry.captureException(err)
     return { message: 'Some error in searching', err: err }
   })
 })
