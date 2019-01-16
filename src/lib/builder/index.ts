@@ -76,8 +76,8 @@ const defaultPrayer = {
 
 const guideTypes = [ 'lecture', 'discussion', 'question', 'answer', 'expositional' ]
 
-exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate((snap, context) => {
-  setSentryUser(context)
+exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate(async (snap, context) => {
+  await setSentryUser(context)
   const devosRef = snap.ref.collection('devos')
   const guidesRef = snap.ref.collection('guides')
   const reviewRef = snap.ref.collection('review')
@@ -122,8 +122,8 @@ exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/less
     .catch(err => { Sentry.captureException(err) })
 })
 
-exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete((snap, context) => {
-  setSentryUser(context)
+exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete(async (snap, context) => {
+  await setSentryUser(context)
   const paths = []
   // Devo collection paths
   for (let x = 1; x <= 7; x++) {

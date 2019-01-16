@@ -180,8 +180,8 @@ const defaultPrayer = {
   editing: false
 }
 
-function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
-  setSentryUser(context)
+async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
+  await setSentryUser(context)
   const initData = snap.data()
   const contentRef = snap.ref
 
@@ -218,8 +218,8 @@ function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context
   return Promise.reject('Unsupported content type')
 }
 
-function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
-  setSentryUser(context)
+async function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
+  await setSentryUser(context)
   console.log(snap.data())
   const initData = snap.data()
   const mediaRef = snap.ref
@@ -252,8 +252,8 @@ exports.addVideo = functions.firestore.document('messageVideo/{id}').onCreate((s
 exports.addIllustration = functions.firestore.document('messageIllustration/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'illustration') })
 exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
 
-function deleteContentHandler (snap, context, type) {
-  setSentryUser(context)
+async function deleteContentHandler (snap, context, type) {
+  await setSentryUser(context)
   // All subcollection paths
   const paths = []
   paths.push(`${snap.ref.path}/structure`)
@@ -317,11 +317,11 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
     }).catch(err => {
       Sentry.captureException(err)
       reject(err)
-    }) 
+    })
 }
 
-exports.searchMedia = functions.https.onCall((data, context) => {
-  setSentryUser(context)
+exports.searchMedia = functions.https.onCall(async (data, context) => {
+  await setSentryUser(context)
   const searchTerms = data.searchTerms
   const searchTypes = data.searchTypes
   const uid = context.auth.uid
