@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions';
-import { defaultApp as admin, auth, firestore } from './../../db'
+import { defaultApp as admin, auth, firestore } from '../db'
 const sgClient = require('@sendgrid/client')
 sgClient.setApiKey(functions.config().sendgrid.key)
 

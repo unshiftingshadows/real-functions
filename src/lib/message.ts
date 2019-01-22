@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions'
-import { defaultApp as admin, firestore } from './../../db'
+import { defaultApp as admin, firestore } from '../db'
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
 

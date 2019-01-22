@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions'
-import { defaultApp as admin } from '../../db'
+import { defaultApp as admin } from '../db'
 const bcv_parser = require('bible-passage-reference-parser/js/en_bcv_parser').bcv_parser
 const htmlToText = require('html-to-text')
 const axios = require('axios')
