@@ -10,14 +10,14 @@ Sentry.configureScope(scope => {
   scope.setTag('function', 'nq')
 })
 
-async function setSentryUser (context) {
-  const user = await admin.auth().getUser(context.auth.uid)
+async function setSentryUser (context, uid) {
+  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
   return Sentry.configureScope(scope => {
     scope.setUser({
       email: user.email,
-      id: context.auth.uid,
+      id: uid || '',
       username: user.displayName,
-      ip_address: context.rawRequest.ip
+      ip_address: context.rawRequest ? context.rawRequest.ip : ''
     })
   })
 }
@@ -25,7 +25,7 @@ async function setSentryUser (context) {
 const snippetTypes = [ 'quote', 'idea', 'illustration', 'outline' ]
 
 exports.login = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
@@ -53,7 +53,7 @@ exports.login = functions.https.onCall(async (data, context) => {
 })
 
 exports.topic = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
@@ -102,7 +102,7 @@ exports.topic = functions.https.onCall(async (data, context) => {
 })
 
 exports.resource = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {

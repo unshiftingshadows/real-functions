@@ -10,14 +10,14 @@ Sentry.configureScope(scope => {
   scope.setTag('function', 'builder')
 })
 
-async function setSentryUser (context) {
-  const user = await admin.auth().getUser(context.auth.uid)
+async function setSentryUser (context, uid) {
+  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
   return Sentry.configureScope(scope => {
     scope.setUser({
       email: user.email,
-      id: context.auth.uid,
+      id: uid || '',
       username: user.displayName,
-      ip_address: context.rawRequest.ip
+      ip_address: context.rawRequest ? context.rawRequest.ip : ''
     })
   })
 }
@@ -77,7 +77,7 @@ const defaultPrayer = {
 const guideTypes = [ 'lecture', 'discussion', 'question', 'answer', 'expositional' ]
 
 exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate(async (snap, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, snap.data().editing)
   const devosRef = snap.ref.collection('devos')
   const guidesRef = snap.ref.collection('guides')
   const reviewRef = snap.ref.collection('review')
@@ -123,7 +123,7 @@ exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/less
 })
 
 exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete(async (snap, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, '')
   const paths = []
   // Devo collection paths
   for (let x = 1; x <= 7; x++) {

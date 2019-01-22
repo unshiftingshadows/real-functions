@@ -12,14 +12,14 @@ Sentry.configureScope(scope => {
   scope.setTag('function', 'user')
 })
 
-async function setSentryUser (context) {
-  const user = await admin.auth().getUser(context.auth.uid)
+async function setSentryUser (context, uid) {
+  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
   return Sentry.configureScope(scope => {
     scope.setUser({
       email: user.email,
-      id: context.auth.uid,
+      id: uid || '',
       username: user.displayName,
-      ip_address: context.rawRequest.ip
+      ip_address: context.rawRequest ? context.rawRequest.ip : ''
     })
   })
 }
@@ -91,7 +91,7 @@ const appDefaults = {
  * @param apps can add default prefs for any number of apps upon registering
  */
 exports.adminAddUser = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   if (context.auth.token.realAdmin !== true) {
     Sentry.captureMessage(`Cloud Function (adminAddUser) not authorized | uid: ${context.auth.uid}`)
     return {
@@ -270,7 +270,7 @@ exports.addUser = functions.https.onRequest((request, response) => {
  * and use any of the REAL Church apps without having to re-login
  */
 exports.appAuth = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   const uid = context.auth.uid
 
   if (uid !== null) {
@@ -302,7 +302,7 @@ exports.appAuth = functions.https.onCall(async (data, context) => {
  * @param appName app to be added to user's prefs
  */
 exports.appAdd = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   const uid = context.auth.uid
   const appName = data.appName
 
@@ -354,7 +354,7 @@ async function grantRealAdminRole(email: string): Promise<void> {
  * @returns {Promise<void>} resolves promise once the claim is set
  */
 exports.addReal = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   if (context.auth.token.realAdmin !== true) {
     Sentry.captureMessage(`Cloud Function (addReal) not authorized | uid: ${context.auth.uid}`)
     return {
@@ -400,7 +400,7 @@ async function grantChurchAdminRole(email: string, churchid: string): Promise<vo
  * @returns {Promise<void>} promise resolves after claim is set
  */
 exports.addAdmin = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   if (context.auth.token.realAdmin !== true && context.auth.token.churchAdmin !== data.churchid) {
     Sentry.captureMessage(`Cloud Function (addAdmin) not authorized | uid: ${context.auth.uid}`)
     return {

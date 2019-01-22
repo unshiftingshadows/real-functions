@@ -12,14 +12,14 @@ Sentry.configureScope(scope => {
   scope.setTag('function', 'message')
 })
 
-async function setSentryUser (context) {
-  const user = await admin.auth().getUser(context.auth.uid)
+async function setSentryUser (context, uid) {
+  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
   return Sentry.configureScope(scope => {
     scope.setUser({
       email: user.email,
-      id: context.auth.uid,
+      id: uid || '',
       username: user.displayName,
-      ip_address: context.rawRequest.ip
+      ip_address: context.rawRequest ? context.rawRequest.ip : ''
     })
   })
 }
@@ -181,7 +181,7 @@ const defaultPrayer = {
 }
 
 async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
-  await setSentryUser(context)
+  await setSentryUser(context, snap.data().createdBy)
   const initData = snap.data()
   const contentRef = snap.ref
 
@@ -219,7 +219,7 @@ async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, c
 }
 
 async function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
-  await setSentryUser(context)
+  await setSentryUser(context, snap.data().user)
   console.log(snap.data())
   const initData = snap.data()
   const mediaRef = snap.ref
@@ -253,7 +253,7 @@ exports.addIllustration = functions.firestore.document('messageIllustration/{id}
 exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
 
 async function deleteContentHandler (snap, context, type) {
-  await setSentryUser(context)
+  await setSentryUser(context, '')
   // All subcollection paths
   const paths = []
   paths.push(`${snap.ref.path}/structure`)
@@ -321,7 +321,7 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
 }
 
 exports.searchMedia = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  await setSentryUser(context, context.auth.uid)
   const searchTerms = data.searchTerms
   const searchTypes = data.searchTypes
   const uid = context.auth.uid
