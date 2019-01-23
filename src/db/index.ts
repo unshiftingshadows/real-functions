@@ -19,3 +19,25 @@ export const nqFirestore = nqApp.firestore()
 nqFirestore.settings(settings)
 
 export const nqAuth = nqApp.auth()
+
+interface LogData {
+  category: string;
+  action: string;
+  label: string;
+  value?: any;
+}
+
+interface LogContext {
+  uid: string;
+  username: string;
+  email: string;
+  ip?: string;
+}
+
+export function log (app: string, data: LogData, context: LogContext) {
+  // firestore.collection(`${app}Log`).add({
+  //   ...data,
+  //   ...context,
+  //   datestamp: new Date()
+  // })
+}

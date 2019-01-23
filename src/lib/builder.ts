@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions';
-import { defaultApp as admin, firestore } from '../db';
+import { defaultApp as admin, firestore, log } from '../db';
 
 const Sentry = require('@sentry/node')
 Sentry.init({
@@ -78,6 +78,16 @@ const guideTypes = [ 'lecture', 'discussion', 'question', 'answer', 'expositiona
 
 exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate(async (snap, context) => {
   await setSentryUser(context, snap.data().editing)
+  log('builder', {
+    category: 'content',
+    action: 'create',
+    label: 'lesson',
+    value: snap.id
+  }, {
+    uid: context.auth ? context.auth.uid : '',
+    username: context.auth ? (await admin.auth().getUser(context.auth.uid)).displayName : '',
+    email: context.auth ? (await admin.auth().getUser(context.auth.uid)).email : ''
+  })
   const devosRef = snap.ref.collection('devos')
   const guidesRef = snap.ref.collection('guides')
   const reviewRef = snap.ref.collection('review')
@@ -124,6 +134,16 @@ exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/less
 
 exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete(async (snap, context) => {
   await setSentryUser(context, '')
+  log('builder', {
+    category: 'content',
+    action: 'remove',
+    label: 'lesson',
+    value: snap.id
+  }, {
+    uid: context.auth ? context.auth.uid : '',
+    username: context.auth ? (await admin.auth().getUser(context.auth.uid)).displayName : '',
+    email: context.auth ? (await admin.auth().getUser(context.auth.uid)).email : ''
+  })
   const paths = []
   // Devo collection paths
   for (let x = 1; x <= 7; x++) {

@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions'
-import { defaultApp as admin } from '../db'
+import { defaultApp as admin, log } from '../db'
 const bcv_parser = require('bible-passage-reference-parser/js/en_bcv_parser').bcv_parser
 const htmlToText = require('html-to-text')
 const axios = require('axios')
@@ -237,7 +237,18 @@ exports.bibleText = functions.https.onCall(async (data, context) => {
     return false
   }
   return versionList[version](parsedRef, version)
-    .then((esvData) => {
+    .then(async (esvData) => {
+      // log('bible', {
+      //   category: 'bible',
+      //   action: 'text',
+      //   label: version,
+      //   value: ref
+      // }, {
+      //   uid: context.auth.uid,
+      //   username: (await admin.auth().getUser(context.auth.uid)).displayName,
+      //   email: (await admin.auth().getUser(context.auth.uid)).email,
+      //   ip: context.rawRequest.ip
+      // })
       Sentry.addBreadcrumb({
         category: 'bible',
         message: `Cloud Function (bibleText) - text retrieved successfully`,
