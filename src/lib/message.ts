@@ -1,5 +1,7 @@
 import * as functions from 'firebase-functions'
+import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, firestore } from '../db'
+import { DocumentReference } from '@google-cloud/firestore';
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
 
@@ -320,6 +322,52 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
     })
 }
 
+type contextTypes = 'doc' | 'section' | 'structure' | 'module'
+type actionTypes = 'add' | 'remove' | 'edit'
+
+interface HistoryChange {
+  context: contextTypes
+  id: string
+  ref: DocumentReference
+  action: actionTypes
+  newVal?: any
+  prevVal?: any
+  uid: string
+  timestamp: Date
+}
+
+async function addHistory (change, context, type) {
+  const document = change.after.exists ? change.after.data() : null
+  const prevDoc = change.before.exists ? change.before.data() : null
+  const uid = document && document.editing ? document.editing : prevDoc && prevDoc.editing ? prevDoc.editing : ''
+  await setSentryUser(context, uid)
+  const docid = context.params.messageid
+  const action = document === null ? 'remove' : prevDoc === null ? 'add' : 'edit'
+  const modChange: HistoryChange = {
+    context: type,
+    id: docid,
+    ref: change.after.ref,
+    action: action,
+    uid: uid,
+    timestamp: new Date(),
+    newVal: document,
+    prevVal: prevDoc
+  }
+  admin.firestore().collection(`messageMessage`).doc(docid).collection('history').add(modChange).then(() => {
+    return Sentry.addBreadcrumb({
+      category: 'message',
+      message: `Cloud Function (history-${type}) - message history point added successful: ${docid} - ${action}`,
+      level: 'info'
+    })
+  }).catch(err => {
+    return Sentry.captureException(err)
+  })
+}
+
+exports.historyModules = functions.firestore.document('messageMessage/{messageid}/modules/{moduleid}').onWrite((change, context) => { return addHistory(change, context, 'module') })
+exports.historySections = functions.firestore.document('messageMessage/{messageid}/sections/{sectionid}').onWrite((change, context) => { return addHistory(change, context, 'section') })
+exports.historyStructure = functions.firestore.document('messageMessage/{messageid}/structure/{structureid}').onWrite((change, context) => { return addHistory(change, context, 'structure') })
+
 exports.searchMedia = functions.https.onCall(async (data, context) => {
   await setSentryUser(context, context.auth.uid)
   const searchTerms = data.searchTerms
@@ -373,4 +421,32 @@ exports.searchMedia = functions.https.onCall(async (data, context) => {
     Sentry.captureException(err)
     return { message: 'Some error in searching', err: err }
   })
+})
+
+function addDocUser (docType, docid, uid) {
+  return admin.firestore().collection(`message${docType.charAt(0).toUpperCase()}${docType.slice(1)}`).doc(docid).update({
+    users: fbAdmin.firestore.FieldValue.arrayUnion(uid)
+  }).then(() => {
+    return { message: 'added!', invited: false, success: true }
+  }).catch(err => {
+    return Sentry.captureException(err)
+  })
+}
+
+exports.shareDoc = functions.https.onCall(async ({ docType, docid, email }, context) => {
+  await setSentryUser(context, context.auth.uid)
+  let user: fbAdmin.auth.UserRecord
+  try {
+    user = await admin.auth().getUserByEmail(email)
+  } catch (error) {
+    if (error.code === 'auth/user-not-found') {
+      // Start looking to add user
+      // Add temp doc with email as id in tempUser
+      // Send invite email to email
+      return { message: 'invite sent', invited: true, success: true }
+    } else {
+      return Sentry.captureException(error)
+    }
+  }
+  return addDocUser(docType, docid, user.uid)
 })
