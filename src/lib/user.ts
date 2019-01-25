@@ -1,7 +1,9 @@
 import * as functions from 'firebase-functions';
+import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, auth, firestore } from '../db'
-const sgClient = require('@sendgrid/client')
-sgClient.setApiKey(functions.config().sendgrid.key)
+import { sendEmail } from './email'
+import { DocumentSnapshot } from '@google-cloud/firestore';
+import { APP } from './notifications';
 
 const Sentry = require('@sentry/node')
 Sentry.init({
@@ -136,37 +138,16 @@ exports.adminAddUser = functions.https.onCall(async (data, context) => {
   }).then((userRecord) => {
     return firestore.collection('user').doc(userRecord.uid).set(newUser)
       .then(() => {
-        const email = {
-          url: '/v3/mail/send',
-          method: 'POST',
-          body: {
-            from: {
-              email: 'login@realchurch.app'
-            },
-            personalizations: [
-              {
-                to: [
-                  {
-                    email: data.email
-                  }
-                ],
-                dynamic_template_data: {
-                  email: data.email,
-                  rand_pswd: randompass
-                }
-              }
-            ],
-            template_id: 'd-eefc40f0276c48dda0988c8b234430d6'
-          }
-        }
-        sgClient.request(email).then(([response, body]) => {
-          console.log('New user data added!', newUser.email, response.statusCode)
-          return { status: 200, message: 'New user data added!', newUser }
-        }).catch((err) => {
-          Sentry.captureException(err)
-          console.error('Error sending new user email', err)
-          return { status: 400, message: 'Error sending new user email', err }
-        })
+        return sendEmail('new', data.email, { pswd: randompass })
+          .then(([response, body]) => {
+            console.log('New user data added!', data.email, response.statusCode)
+            return { status: 200, message: 'New user data added!', newUser }
+          })
+          .catch(err => {
+            Sentry.captureException(err)
+            console.error('Error sending new user email', err)
+            return { status: 400, message: 'Error sending new user email', err }
+          })
       }).catch((err) => {
         Sentry.captureException(err)
         console.error('Error adding new user data', err)
@@ -200,10 +181,59 @@ exports.addUser = functions.https.onRequest((request, response) => {
     response.status(400).send('Error - no email')
     return
   }
-  const newUser = {
-    name: request.body.name,
+
+  const randompass = Math.random().toString(36).slice(-8);
+
+  auth.createUser({
     email: request.body.email,
-    churchid: request.body.churchid || false,
+    password: randompass,
+    emailVerified: true
+  }).then((userRecord) => {
+    addUserData(userRecord.uid, request.body.name, request.body.email, request.body.app, request.body.churchid).then(() => {
+      Sentry.addBreadcrumb({
+        category: 'auth',
+        message: 'New user created (https request)',
+        level: 'info'
+      })
+      console.log('New user data added!', userRecord.email)
+      response.send('New user added!')
+      return
+    }).catch((err) => {
+      Sentry.captureException(err)
+      console.error('Error adding new user data', err)
+      response.status(400).send('Error adding new user data')
+      return
+    })
+  }).catch((err) => {
+    Sentry.captureException(err)
+    console.error('Error creating new user: ', err)
+    response.status(400).send('Error creating new user')
+    return
+  })
+})
+
+exports.addUserData = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    Sentry.captureMessage(`Cloud Function (addUserData) not authorized...`)
+    return {
+      error: 'Request not authorized'
+    }
+  }
+  await setSentryUser(context, context.auth.uid)
+  await admin.auth().updateUser(context.auth.uid, { displayName: data.name.first + ' ' + data.name.last })
+  return addUserData(context.auth.uid, data.name, data.email, data.app, data.churchid).then(() => {
+    return { message: 'Success!' }
+  }).catch(err =>{
+    Sentry.captureException(err)
+    return { message: 'Failed', err }
+  })
+})
+
+function addUserData (uid: string, name: string, email: string, app: APP, churchid?: string) {
+  const newUser = {
+    name: name,
+    email: email,
+    churchid: churchid || false,
     churchRoles: {},
     newUser: true,
     nqUser: false,
@@ -225,7 +255,7 @@ exports.addUser = functions.https.onRequest((request, response) => {
     realRoles: {}
   }
 
-  switch (request.body.app) {
+  switch (app) {
     case 'message':
       newUser.app.message = messageApp
       break
@@ -233,35 +263,27 @@ exports.addUser = functions.https.onRequest((request, response) => {
       console.error('not acceptable app type')
   }
 
-  const randompass = Math.random().toString(36).slice(-8);
+  return firestore.collection('user').doc(uid).set(newUser)
+}
 
-  auth.createUser({
-    email: request.body.email,
-    password: randompass,
-    emailVerified: true
-  }).then((userRecord) => {
-    firestore.collection('user').doc(userRecord.uid).set(newUser)
-      .then(() => {
-        Sentry.addBreadcrumb({
-          category: 'auth',
-          message: 'New user created (https request)',
-          level: 'info'
-        })
-        console.log('New user data added!', newUser.email)
-        response.send('New user added!')
-        return
-      }).catch((err) => {
-        Sentry.captureException(err)
-        console.error('Error adding new user data', err)
-        response.status(400).send('Error adding new user data')
-        return
-      })
-  }).catch((err) => {
-    Sentry.captureException(err)
-    console.error('Error creating new user: ', err)
-    response.status(400).send('Error creating new user')
-    return
+exports.newUserCheck = functions.auth.user().onCreate(async (user) => {
+  let tempData: DocumentSnapshot
+  try {
+    tempData = await firestore.collection('userTemp').doc(user.email).get()
+  } catch (err) {
+    return false
+  }
+  // TODO: Log the fact that an invited user signed up
+  // Set new user data
+  // Set new uid to any docs that need to be shared
+  const batch = firestore.batch()
+  tempData.data().shareDoc.forEach((doc: { docType: string, docid: string }) => {
+    batch.update(firestore.collection(`message${doc.docType.charAt(0).toUpperCase()}${doc.docType.slice(1)}`).doc(doc.docid), {
+      users: fbAdmin.firestore.FieldValue.arrayUnion(user.uid)
+    })
+    batch.delete(tempData.ref)
   })
+  return batch.commit()
 })
 
 /**

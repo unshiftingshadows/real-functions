@@ -21,3 +21,6 @@ exports.nq = require('./lib/nq')
 
 // Loggging function
 // exports.log = require('./lib/logging')
+
+// Notification function
+exports.notification = require('./lib/notifications')

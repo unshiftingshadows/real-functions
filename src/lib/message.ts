@@ -1,6 +1,8 @@
 import * as functions from 'firebase-functions'
 import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, firestore } from '../db'
+import { sendEmail } from './email'
+import { Notification, addNotification, NotificationAction } from './notifications'
 import { DocumentReference } from '@google-cloud/firestore';
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
@@ -423,17 +425,20 @@ exports.searchMedia = functions.https.onCall(async (data, context) => {
   })
 })
 
-function addDocUser (docType, docid, uid) {
+function addDocUser (docType, docid: string, uid: string, originuid: string) {
   return admin.firestore().collection(`message${docType.charAt(0).toUpperCase()}${docType.slice(1)}`).doc(docid).update({
     users: fbAdmin.firestore.FieldValue.arrayUnion(uid)
-  }).then(() => {
+  }).then(async () => {
+    const notification = new Notification({ uid: originuid, username: (await admin.auth().getUser(originuid)).displayName }, 'invite', `Invite to ${docType}`, `shared a ${docType} with you!`)
+    notification.setAction(new NotificationAction('message', 'view', docType, docid))
+    await addNotification(uid, notification)
     return { message: 'added!', invited: false, success: true }
   }).catch(err => {
     return Sentry.captureException(err)
   })
 }
 
-exports.shareDoc = functions.https.onCall(async ({ docType, docid, email }, context) => {
+exports.shareDoc = functions.https.onCall(async ({ docType, docid, email, seriesid }, context) => {
   await setSentryUser(context, context.auth.uid)
   let user: fbAdmin.auth.UserRecord
   try {
@@ -441,12 +446,34 @@ exports.shareDoc = functions.https.onCall(async ({ docType, docid, email }, cont
   } catch (error) {
     if (error.code === 'auth/user-not-found') {
       // Start looking to add user
-      // Add temp doc with email as id in tempUser
-      // Send invite email to email
-      return { message: 'invite sent', invited: true, success: true }
+      try {
+        // Add temp doc with email as id in tempUser
+        await firestore.collection('userTemp').doc(email).set({
+          invitedBy: context.auth.uid,
+          invitedDate: new Date(),
+          shareDoc: fbAdmin.firestore.FieldValue.arrayUnion.apply(null, seriesid ? [{ docType, docid }, { docType: 'series', docid: seriesid }] : [{ docType, docid }])
+        }, { merge: true })
+        console.log('userTemp data added')
+        // Send invite email to email
+        await sendEmail('invite', email, { username: (await admin.auth().getUser(context.auth.uid)).displayName, docType, app: 'message' })
+          .then(([response, body]) => {
+            console.log('New user invited!', email, response.statusCode)
+            return { status: 200, message: 'New user invited!' }
+          })
+          .catch(err => {
+            Sentry.captureException(err)
+            console.error('Error sending new user email', err)
+            return { status: 400, message: 'Error sending new user email', err }
+          })
+        console.log('email sent')
+        return { message: 'invite sent', invited: true, success: true }
+      } catch (err) {
+        await Sentry.captureException(err)
+        return { message: 'error...', invited: false, success: false }
+      }
     } else {
       return Sentry.captureException(error)
     }
   }
-  return addDocUser(docType, docid, user.uid)
+  return addDocUser(docType, docid, user.uid, context.auth.uid)
 })
