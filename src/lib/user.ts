@@ -100,34 +100,6 @@ exports.adminAddUser = functions.https.onCall(async (data, context) => {
       error: "Request not authorized"
     }
   }
-  const newUser = {
-    name: data.name,
-    email: data.email,
-    churchid: data.churchid || false,
-    churchRoles: {},
-    newUser: true,
-    nqUser: false,
-    app: {
-      prefs: {
-        theme: 'light',
-        bibleTranslation: 'nas'
-      },
-      lastPage: {
-        host: '',
-        path: ''
-      },
-      message: {}
-    },
-    supportRestore: {
-      message: ''
-    },
-    realUser: false,
-    realRoles: {}
-  }
-
-  data.apps.forEach(app => {
-    newUser.app[app] = appDefaults[app]
-  })
 
   const randompass = Math.random().toString(36).slice(-8);
 
@@ -136,12 +108,12 @@ exports.adminAddUser = functions.https.onCall(async (data, context) => {
     password: randompass,
     emailVerified: true
   }).then((userRecord) => {
-    return firestore.collection('user').doc(userRecord.uid).set(newUser)
+    return addUserData(userRecord.uid, data.name, data.email, data.apps, data.churchid)
       .then(() => {
         return sendEmail('new', data.email, { pswd: randompass })
           .then(([response, body]) => {
             console.log('New user data added!', data.email, response.statusCode)
-            return { status: 200, message: 'New user data added!', newUser }
+            return { status: 200, message: 'New user data added!' }
           })
           .catch(err => {
             Sentry.captureException(err)
@@ -189,7 +161,7 @@ exports.addUser = functions.https.onRequest((request, response) => {
     password: randompass,
     emailVerified: true
   }).then((userRecord) => {
-    addUserData(userRecord.uid, request.body.name, request.body.email, request.body.app, request.body.churchid).then(() => {
+    addUserData(userRecord.uid, request.body.name, request.body.email, [request.body.app], request.body.churchid).then(() => {
       Sentry.addBreadcrumb({
         category: 'auth',
         message: 'New user created (https request)',
@@ -220,8 +192,7 @@ exports.addUserData = functions.https.onCall(async (data, context) => {
     }
   }
   await setSentryUser(context, context.auth.uid)
-  await admin.auth().updateUser(context.auth.uid, { displayName: data.name.first + ' ' + data.name.last })
-  return addUserData(context.auth.uid, data.name, data.email, data.app, data.churchid).then(() => {
+  return addUserData(context.auth.uid, data.name, data.email, [data.app], data.churchid).then(() => {
     return { message: 'Success!' }
   }).catch(err =>{
     Sentry.captureException(err)
@@ -229,7 +200,9 @@ exports.addUserData = functions.https.onCall(async (data, context) => {
   })
 })
 
-function addUserData (uid: string, name: string, email: string, app: APP, churchid?: string) {
+async function addUserData (uid: string, name: { first: string, last: string }, email: string, apps: [APP], churchid?: string) {
+  await admin.auth().updateUser(uid, { displayName: name.first + ' ' + name.last })
+
   const newUser = {
     name: name,
     email: email,
@@ -255,13 +228,9 @@ function addUserData (uid: string, name: string, email: string, app: APP, church
     realRoles: {}
   }
 
-  switch (app) {
-    case 'message':
-      newUser.app.message = messageApp
-      break
-    default:
-      console.error('not acceptable app type')
-  }
+  apps.forEach(app => {
+    newUser.app[app] = appDefaults[app]
+  })
 
   return firestore.collection('user').doc(uid).set(newUser)
 }
