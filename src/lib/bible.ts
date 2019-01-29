@@ -237,7 +237,7 @@ exports.bibleText = functions.https.onCall(async (data, context) => {
     return false
   }
   return versionList[version](parsedRef, version)
-    .then(async (esvData) => {
+    .then(async (finalData) => {
       // log('bible', {
       //   category: 'bible',
       //   action: 'text',
@@ -251,13 +251,10 @@ exports.bibleText = functions.https.onCall(async (data, context) => {
       // })
       Sentry.addBreadcrumb({
         category: 'bible',
-        message: `Cloud Function (bibleText) - text retrieved successfully`,
+        message: `Cloud Function (bibleText) - ${version} text retrieved successfully`,
         level: 'info'
       })
-      return {
-        parse: parsedRef,
-        text: esvData.data.passages.join('...')
-      }
+      return finalData
     })
     .catch((err) => {
       Sentry.captureException(err)

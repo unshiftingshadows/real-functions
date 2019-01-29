@@ -108,7 +108,7 @@ exports.adminAddUser = functions.https.onCall(async (data, context) => {
     password: randompass,
     emailVerified: true
   }).then((userRecord) => {
-    return addUserData(userRecord.uid, data.name, data.email, data.apps, data.churchid)
+    return addUserData(userRecord.uid, data.name, data.email, data.apps, true, data.churchid)
       .then(() => {
         return sendEmail('new', data.email, { pswd: randompass })
           .then(([response, body]) => {
@@ -161,7 +161,7 @@ exports.addUser = functions.https.onRequest((request, response) => {
     password: randompass,
     emailVerified: true
   }).then((userRecord) => {
-    addUserData(userRecord.uid, request.body.name, request.body.email, [request.body.app], request.body.churchid).then(() => {
+    addUserData(userRecord.uid, request.body.name, request.body.email, [request.body.app], true, request.body.churchid).then(() => {
       Sentry.addBreadcrumb({
         category: 'auth',
         message: 'New user created (https request)',
@@ -192,7 +192,7 @@ exports.addUserData = functions.https.onCall(async (data, context) => {
     }
   }
   await setSentryUser(context, context.auth.uid)
-  return addUserData(context.auth.uid, data.name, data.email, [data.app], data.churchid).then(() => {
+  return addUserData(context.auth.uid, data.name, data.email, [data.app], false, data.churchid).then(() => {
     return { message: 'Success!' }
   }).catch(err =>{
     Sentry.captureException(err)
@@ -200,7 +200,7 @@ exports.addUserData = functions.https.onCall(async (data, context) => {
   })
 })
 
-async function addUserData (uid: string, name: { first: string, last: string }, email: string, apps: [APP], churchid?: string) {
+async function addUserData (uid: string, name: { first: string, last: string }, email: string, apps: [APP], needPswd: boolean, churchid?: string) {
   await admin.auth().updateUser(uid, { displayName: name.first + ' ' + name.last })
 
   const newUser = {
@@ -208,7 +208,7 @@ async function addUserData (uid: string, name: { first: string, last: string }, 
     email: email,
     churchid: churchid || false,
     churchRoles: {},
-    newUser: true,
+    newUser: needPswd,
     nqUser: false,
     app: {
       prefs: {
@@ -243,7 +243,6 @@ exports.newUserCheck = functions.auth.user().onCreate(async (user) => {
     return false
   }
   // TODO: Log the fact that an invited user signed up
-  // Set new user data
   // Set new uid to any docs that need to be shared
   const batch = firestore.batch()
   tempData.data().shareDoc.forEach((doc: { docType: string, docid: string }) => {
