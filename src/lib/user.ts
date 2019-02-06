@@ -2,7 +2,6 @@ import * as functions from 'firebase-functions';
 import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, auth, firestore } from '../db'
 import { sendEmail } from './email'
-import { DocumentSnapshot } from '@google-cloud/firestore';
 import { APP } from './notifications';
 
 const Sentry = require('@sentry/node')
@@ -236,7 +235,7 @@ async function addUserData (uid: string, name: { first: string, last: string }, 
 }
 
 exports.newUserCheck = functions.auth.user().onCreate(async (user) => {
-  let tempData: DocumentSnapshot
+  let tempData: fbAdmin.firestore.DocumentSnapshot
   try {
     tempData = await firestore.collection('userTemp').doc(user.email).get()
   } catch (err) {

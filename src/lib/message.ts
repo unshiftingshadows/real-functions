@@ -3,8 +3,7 @@ import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, firestore } from '../db'
 import { sendEmail } from './email'
 import { Notification, addNotification, NotificationAction } from './notifications'
-import { DocumentReference } from '@google-cloud/firestore';
-import { stringify } from 'querystring';
+// import { DocumentReference } from '@google-cloud/firestore';
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
 
@@ -111,75 +110,75 @@ function defaultContent (type: ContentTypes) {
   }
 }
 
-type MediaTypes = 'quote' | 'image' | 'video' | 'illustration' | 'lyric'
+// type MediaTypes = 'quote' | 'image' | 'video' | 'illustration' | 'lyric'
 
-function defaultMedia (type: MediaTypes) {
-  switch (type) {
-    case 'quote':
-      return {
-        author: '',
-        bibleRefs: [],
-        dateAdded: new Date(),
-        dateModified: new Date(),
-        mediaType: '',
-        tags: [],
-        text: '',
-        title: '',
-        user: ''
-      }
-    case 'video':
-      return {
-        bibleRefs: [],
-        dateAdded: new Date(),
-        dateModified: new Date(),
-        embedURL: '',
-        pageURL: '',
-        service: '',
-        tags: [],
-        thumbURL: '',
-        title: '',
-        user: '',
-        videoID: ''
-      }
-    case 'illustration':
-      return {
-        author: '',
-        bibleRefs: [],
-        dateAdded: new Date(),
-        dateModified: new Date(),
-        tags: [],
-        title: '',
-        text: '',
-        users: []
-      }
-    case 'image':
-      return {
-        bibleRefs: [],
-        dateAdded: new Date(),
-        dateModified: new Date(),
-        imageURL: '',
-        service: '',
-        storageID: '',
-        tags: [],
-        thumbURL: '',
-        user: ''
-      }
-    case 'lyric':
-      return {
-        author: '',
-        bibleRefs: [],
-        dateAdded: new Date(),
-        dateModified: new Date(),
-        medium: '',
-        tags: [],
-        text: '',
-        title: '',
-        user: ''
-      }
-    default:
-      return false
-  }
-}
+// function defaultMedia (type: MediaTypes) {
+//   switch (type) {
+//     case 'quote':
+//       return {
+//         author: '',
+//         bibleRefs: [],
+//         dateAdded: new Date(),
+//         dateModified: new Date(),
+//         mediaType: '',
+//         tags: [],
+//         text: '',
+//         title: '',
+//         user: ''
+//       }
+//     case 'video':
+//       return {
+//         bibleRefs: [],
+//         dateAdded: new Date(),
+//         dateModified: new Date(),
+//         embedURL: '',
+//         pageURL: '',
+//         service: '',
+//         tags: [],
+//         thumbURL: '',
+//         title: '',
+//         user: '',
+//         videoID: ''
+//       }
+//     case 'illustration':
+//       return {
+//         author: '',
+//         bibleRefs: [],
+//         dateAdded: new Date(),
+//         dateModified: new Date(),
+//         tags: [],
+//         title: '',
+//         text: '',
+//         users: []
+//       }
+//     case 'image':
+//       return {
+//         bibleRefs: [],
+//         dateAdded: new Date(),
+//         dateModified: new Date(),
+//         imageURL: '',
+//         service: '',
+//         storageID: '',
+//         tags: [],
+//         thumbURL: '',
+//         user: ''
+//       }
+//     case 'lyric':
+//       return {
+//         author: '',
+//         bibleRefs: [],
+//         dateAdded: new Date(),
+//         dateModified: new Date(),
+//         medium: '',
+//         tags: [],
+//         text: '',
+//         title: '',
+//         user: ''
+//       }
+//     default:
+//       return false
+//   }
+// }
 
 const defaultHook = {
   pos: 'before',
@@ -248,39 +247,39 @@ async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, c
   return Promise.reject('Unsupported content type')
 }
 
-async function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
-  await setSentryUser(context, snap.data().user)
-  console.log(snap.data())
-  const initData = snap.data()
-  const mediaRef = snap.ref
+// async function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
+//   await setSentryUser(context, snap.data().user)
+//   console.log(snap.data())
+//   const initData = snap.data()
+//   const mediaRef = snap.ref
 
-  const mediaObj = defaultMedia(type)
+//   const mediaObj = defaultMedia(type)
 
-  if (mediaObj) {
-    // Setup properties
-    Object.keys(initData).forEach((key) => {
-      mediaObj[key] = initData[key]
-    })
-    Sentry.addBreadcrumb({
-      category: 'message',
-      message: `Cloud Function (createMedia) - ${type} media added successfully`,
-      level: 'info'
-    })
-    return mediaRef.set(mediaObj).catch(err => { Sentry.captureException(err) })
-  }
+//   if (mediaObj) {
+//     // Setup properties
+//     Object.keys(initData).forEach((key) => {
+//       mediaObj[key] = initData[key]
+//     })
+//     Sentry.addBreadcrumb({
+//       category: 'message',
+//       message: `Cloud Function (createMedia) - ${type} media added successfully`,
+//       level: 'info'
+//     })
+//     return mediaRef.set(mediaObj).catch(err => { Sentry.captureException(err) })
+//   }
 
-  Sentry.captureException(Error(`Cloud Function (createMedia) - Unsupported media type ${type}`))
-  return Promise.reject('Unsupported media type')  
-}
+//   Sentry.captureException(Error(`Cloud Function (createMedia) - Unsupported media type ${type}`))
+//   return Promise.reject('Unsupported media type')  
+// }
 
 exports.addSeries = functions.firestore.document('messageSeries/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'series') })
 exports.addMessage = functions.firestore.document('messageMessage/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'message') })
 exports.addScratch = functions.firestore.document('messageScratch/{id}').onCreate((snap, context) => { return createContentHandler(snap, context, 'scratch') })
-exports.addQuote = functions.firestore.document('messageQuote/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'quote') })
-exports.addImage = functions.firestore.document('messageImage/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'image') })
-exports.addVideo = functions.firestore.document('messageVideo/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'video') })
-exports.addIllustration = functions.firestore.document('messageIllustration/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'illustration') })
-exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
+// exports.addQuote = functions.firestore.document('messageQuote/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'quote') })
+// exports.addImage = functions.firestore.document('messageImage/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'image') })
+// exports.addVideo = functions.firestore.document('messageVideo/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'video') })
+// exports.addIllustration = functions.firestore.document('messageIllustration/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'illustration') })
+// exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
 
 async function deleteContentHandler (snap, context, type) {
   await setSentryUser(context, '')
@@ -356,7 +355,7 @@ type actionTypes = 'add' | 'remove' | 'edit'
 interface HistoryChange {
   context: contextTypes
   id: string
-  ref: DocumentReference
+  ref: fbAdmin.firestore.DocumentReference
   action: actionTypes
   newVal?: any
   prevVal?: any

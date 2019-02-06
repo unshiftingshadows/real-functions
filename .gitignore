@@ -5,6 +5,7 @@
 node_modules
 /lib
 npm-debug.log*
+.runtimeconfig.json
 
 # Editor directories and files
 .idea
