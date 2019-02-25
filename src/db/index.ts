@@ -15,6 +15,8 @@ firestore.settings(settings)
 
 export const auth = defaultApp.auth()
 
+export const storage = defaultApp.storage()
+
 export const nqFirestore = nqApp.firestore()
 nqFirestore.settings(settings)
 

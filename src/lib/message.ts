@@ -1,8 +1,9 @@
 import * as functions from 'firebase-functions'
 import * as fbAdmin from 'firebase-admin'
-import { defaultApp as admin, firestore } from '../db'
+import { defaultApp as admin, firestore, storage } from '../db'
 import { sendEmail } from './email'
 import { Notification, addNotification, NotificationAction } from './notifications'
+import { doesNotThrow } from 'assert';
 // import { DocumentReference } from '@google-cloud/firestore';
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
@@ -64,6 +65,7 @@ function defaultContent (type: ContentTypes) {
         mainIdea: '',
         messageOrder: [],
         ownedBy: '',
+        sharedWith: [],
         tags: [],
         title: '',
         type: '',
@@ -220,10 +222,13 @@ async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, c
     contentObj.title = initData.title
     contentObj.createdBy = initData.createdBy
     contentObj.ownedBy = initData.createdBy
-    contentObj.users = [initData.createdBy]
+    contentObj.users = initData.users || [initData.createdBy]
     if (type === 'message') {
       contentObj.prefs = initData.prefs
       contentObj.seriesid = initData.seriesid || ''
+    }
+    if (type === 'series') {
+      contentObj.sharedWith = initData.users || [initData.createdBy]
     }
     const batch = firestore.batch()
     if (initData.template !== '') {
@@ -454,6 +459,8 @@ async function addDocUser (docType, docid: string, users: string[], originuid: s
   simpleLog('addDocUser started')
   console.log('addDocUser started', docType, docid, users.length, originuid)
   return admin.firestore().collection(`message${docType.charAt(0).toUpperCase()}${docType.slice(1)}`).doc(docid).update({
+    modifiedDate: new Date(),
+    modifiedBy: originuid,
     users: fbAdmin.firestore.FieldValue.arrayUnion( ...users )
   }).then(async () => {
     if (docType === 'series') {
@@ -465,12 +472,24 @@ async function addDocUser (docType, docid: string, users: string[], originuid: s
             users: fbAdmin.firestore.FieldValue.arrayUnion( ...users )
           })
         })
+        batch.update(admin.firestore().collection('messageSeries').doc(docid), {
+          sharedWith: fbAdmin.firestore.FieldValue.arrayUnion( ...users )
+        })
         await batch.commit()
       } catch (err) {
         simpleLog('addDocUse - series messages updates failed')
         console.error(err)
         return Sentry.captureException(err)
       }
+    }
+    if (docType === 'message') {
+      admin.firestore().collection('messageMessage').doc(docid).get().then((res) => {
+        if (res.data().seriesid !== '') {
+          admin.firestore().collection('messageSeries').doc(res.data().seriesid).update({
+            users: fbAdmin.firestore.FieldValue.arrayUnion( ...users )
+          })
+        }
+      })
     }
     try {
       const notification = new Notification({ uid: originuid, username: (await admin.auth().getUser(originuid)).displayName }, 'invite', `Invite to ${docType}`, `shared a ${docType} with you!`)
@@ -591,4 +610,43 @@ exports.shareDoc = functions.https.onCall(async ({ docType, docid, emails }, con
     await Promise.all(newEmails.map(e => { return addTempUser(e, context.auth.uid, docType, docid) }))
   }
   return { success: true }
+})
+
+exports.archiveMessage = functions.https.onRequest(async (req, res) => {
+  let dateCheck = new Date()
+  dateCheck.setMonth(dateCheck.getMonth() - 6)
+  const messages = await firestore.collection('messageMessage').where('modifiedDate', '<', dateCheck).get()
+  if (!messages.empty) {
+    messages.docs.forEach(async (doc) => {
+      try {
+        const id = doc.id
+        const message = doc.data()
+        const structure = (await firestore.collection('messageMessage').doc(id).collection('structure').get())
+        const sections = await firestore.collection('messageMessage').doc(id).collection('sections').get()
+        const modules = await firestore.collection('messageMessage').doc(id).collection('modules').get()
+        const history = await firestore.collection('messageMessage').doc(id).collection('history').get()
+        firestore.collection('messageArchive').doc(message.ownedBy).set({
+          messages: fbAdmin.firestore.FieldValue.arrayUnion({ id, title: message.title, mainIdea: message.mainIdea, tags: message.tags, bibleRefs: message.bibleRefs })
+        }, { merge: true })
+        const file = storage.bucket('real-dev-users').file(`/${message.ownedBy}/${id}`)
+        await file.save(JSON.stringify({ id, message, structure, sections, modules, history }))
+        res.send({ status: 'done', message: 'File saved!'})
+      } catch (err) {
+        res.sendStatus(500).send({ status: 'failed', message: 'Something went wrong...' })
+      }
+    })
+  } else {
+    res.send({ status: 'done', message: 'No messages to archive' })
+  }
+})
+
+exports.restoreMessage = functions.https.onCall(async (data, context) => {
+  await setSentryUser(context, context.auth.uid)
+  const id = data.id
+  const uid = context.auth.uid
+  if (!uid) {
+    return { status: 'failed', message: 'No user ID' }
+  }
+  const file = await storage.bucket('real-dev-users').file(`/${uid}/${id}`).get()
+  return file
 })
