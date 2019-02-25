@@ -393,7 +393,7 @@ exports.addAdmin = functions.https.onCall(async (data, context) => {
   if (context.auth.token.realAdmin !== true && context.auth.token.churchAdmin !== data.churchid) {
     Sentry.captureMessage(`Cloud Function (addAdmin) not authorized | uid: ${context.auth.uid}`)
     return {
-      error: "Request not authorized"
+      error: 'Request not authorized'
     }
   }
   const email = data.email
@@ -408,4 +408,15 @@ exports.addAdmin = functions.https.onCall(async (data, context) => {
       result: `Request fulfilled! ${email} is now a Church Admin`
     }
   })
+})
+
+exports.getDisplayName = functions.https.onCall(async (data, context) => {
+  await setSentryUser(context, context.auth.uid)
+  if (!context.auth) {
+    Sentry.captureMessage(`Cloud Function (getDisplayName) not authorized | uid: ${context.auth.uid}`)
+    return {
+      error: 'Request not authorized'
+    }
+  }
+  return (await admin.auth().getUser(data.uid)).displayName
 })
