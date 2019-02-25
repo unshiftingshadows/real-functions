@@ -24,3 +24,9 @@ exports.nq = require('./lib/nq')
 
 // Notification function
 exports.notification = require('./lib/notifications')
+
+// Subscribe function
+// exports.subscribe = require('./lib/subscribe')
+
+// Support function
+// exports.support = require('./lib/support')
