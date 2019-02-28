@@ -3,7 +3,7 @@ import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, firestore, storage } from '../db'
 import { sendEmail } from './email'
 import { Notification, addNotification, NotificationAction } from './notifications'
-import { doesNotThrow } from 'assert';
+import * as Sentry from '../sentry'
 // import { DocumentReference } from '@google-cloud/firestore';
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
@@ -27,27 +27,6 @@ function simpleLog (message: string, object?: any) {
     message: message,
     value: object || null
   }))
-}
-
-const Sentry = require('@sentry/node')
-Sentry.init({
-  dsn: 'https://d3d741dcf97f43969ea1cb4416073960@sentry.io/1373107',
-  environment: JSON.parse(process.env.FIREBASE_CONFIG).projectId === 'real-45953' ? 'prod' : 'staging'
-})
-Sentry.configureScope(scope => {
-  scope.setTag('function', 'message')
-})
-
-async function setSentryUser (context, uid) {
-  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
-  return Sentry.configureScope(scope => {
-    scope.setUser({
-      email: user.email,
-      id: uid || '',
-      username: user.displayName,
-      ip_address: context.rawRequest ? context.rawRequest.ip : ''
-    })
-  })
 }
 
 type ContentTypes = 'message' | 'scratch' | 'series'
@@ -211,7 +190,7 @@ const defaultPrayer = {
 }
 
 async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
-  await setSentryUser(context, snap.data().createdBy)
+  await Sentry.setSentryUser(context, snap.data().createdBy)
   const initData = snap.data()
   const contentRef = snap.ref
 
@@ -253,7 +232,7 @@ async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, c
 }
 
 // async function createMediaHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: MediaTypes) {
-//   await setSentryUser(context, snap.data().user)
+//   await Sentry.setSentryUser(context, snap.data().user)
 //   console.log(snap.data())
 //   const initData = snap.data()
 //   const mediaRef = snap.ref
@@ -287,7 +266,7 @@ exports.addScratch = functions.firestore.document('messageScratch/{id}').onCreat
 // exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
 
 async function deleteContentHandler (snap, context, type) {
-  await setSentryUser(context, '')
+  await Sentry.setSentryUser(context, '')
   // All subcollection paths
   const paths = []
   paths.push(`${snap.ref.path}/structure`)
@@ -372,7 +351,7 @@ async function addHistory (change, context, type) {
   const document = change.after.exists ? change.after.data() : null
   const prevDoc = change.before.exists ? change.before.data() : null
   const uid = document && document.editing ? document.editing : prevDoc && prevDoc.editing ? prevDoc.editing : ''
-  await setSentryUser(context, uid)
+  await Sentry.setSentryUser(context, uid)
   const docid = context.params.messageid
   const action = document === null ? 'remove' : prevDoc === null ? 'add' : 'edit'
   const modChange: HistoryChange = {
@@ -401,7 +380,7 @@ exports.historySections = functions.firestore.document('messageMessage/{messagei
 exports.historyStructure = functions.firestore.document('messageMessage/{messageid}/structure/{structureid}').onWrite((change, context) => { return addHistory(change, context, 'structure') })
 
 exports.searchMedia = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context, context.auth.uid)
+  await Sentry.setSentryUser(context, context.auth.uid)
   const searchTerms = data.searchTerms
   const searchTypes = data.searchTypes
   const uid = context.auth.uid
@@ -557,7 +536,7 @@ function isUser (email: string) {
 
 exports.shareDoc = functions.https.onCall(async ({ docType, docid, emails }, context) => {
   simpleLog('before set sentry')
-  await setSentryUser(context, context.auth.uid)
+  await Sentry.setSentryUser(context, context.auth.uid)
   simpleLog('after set sentry')
   let users: string[] = []
   let newEmails: string[] = []
@@ -613,7 +592,7 @@ exports.shareDoc = functions.https.onCall(async ({ docType, docid, emails }, con
 })
 
 exports.archiveMessage = functions.https.onRequest(async (req, res) => {
-  let dateCheck = new Date()
+  const dateCheck = new Date()
   dateCheck.setMonth(dateCheck.getMonth() - 6)
   const messages = await firestore.collection('messageMessage').where('modifiedDate', '<', dateCheck).get()
   if (!messages.empty) {
@@ -641,7 +620,7 @@ exports.archiveMessage = functions.https.onRequest(async (req, res) => {
 })
 
 exports.restoreMessage = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context, context.auth.uid)
+  await Sentry.setSentryUser(context, context.auth.uid)
   const id = data.id
   const uid = context.auth.uid
   if (!uid) {

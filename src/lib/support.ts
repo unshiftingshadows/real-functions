@@ -2,7 +2,7 @@ import * as functions from 'firebase-functions'
 const nodemailer = require('nodemailer')
 
 exports.sendSupport = functions.https.onCall((data, context) => {
-  var transporter = nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: functions.config().gmail.email,

@@ -1,26 +1,6 @@
 import * as functions from 'firebase-functions';
 import { defaultApp as admin, firestore, log } from '../db';
-
-const Sentry = require('@sentry/node')
-Sentry.init({
-  dsn: 'https://d3d741dcf97f43969ea1cb4416073960@sentry.io/1373107',
-  environment: JSON.parse(process.env.FIREBASE_CONFIG).projectId === 'real-45953' ? 'prod' : 'staging'
-})
-Sentry.configureScope(scope => {
-  scope.setTag('function', 'builder')
-})
-
-async function setSentryUser (context, uid) {
-  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
-  return Sentry.configureScope(scope => {
-    scope.setUser({
-      email: user.email,
-      id: uid || '',
-      username: user.displayName,
-      ip_address: context.rawRequest ? context.rawRequest.ip : ''
-    })
-  })
-}
+import * as Sentry from '../sentry'
 
 const defaultDevo = {
   editing: false,
@@ -77,7 +57,7 @@ const defaultPrayer = {
 const guideTypes = [ 'lecture', 'discussion', 'question', 'answer', 'expositional' ]
 
 exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate(async (snap, context) => {
-  await setSentryUser(context, snap.data().editing)
+  await Sentry.setSentryUser(context, snap.data().editing)
   log('builder', {
     category: 'content',
     action: 'create',
@@ -133,7 +113,7 @@ exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/less
 })
 
 exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete(async (snap, context) => {
-  await setSentryUser(context, '')
+  await Sentry.setSentryUser(context, '')
   log('builder', {
     category: 'content',
     action: 'remove',

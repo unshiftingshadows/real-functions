@@ -1,31 +1,11 @@
 import * as functions from 'firebase-functions';
-import { defaultApp as admin, auth, nqAuth, nqFirestore } from '../db';
-
-const Sentry = require('@sentry/node')
-Sentry.init({
-  dsn: 'https://d3d741dcf97f43969ea1cb4416073960@sentry.io/1373107',
-  environment: JSON.parse(process.env.FIREBASE_CONFIG).projectId === 'real-45953' ? 'prod' : 'staging'
-})
-Sentry.configureScope(scope => {
-  scope.setTag('function', 'nq')
-})
-
-async function setSentryUser (context, uid) {
-  const user = uid !== '' ? await admin.auth().getUser(uid) : { email: '', displayName: '' }
-  return Sentry.configureScope(scope => {
-    scope.setUser({
-      email: user.email,
-      id: uid || '',
-      username: user.displayName,
-      ip_address: context.rawRequest ? context.rawRequest.ip : ''
-    })
-  })
-}
+import { auth, nqAuth, nqFirestore } from '../db';
+import * as Sentry from '../sentry'
 
 const snippetTypes = [ 'quote', 'idea', 'illustration', 'outline' ]
 
 exports.login = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context, context.auth.uid)
+  await Sentry.setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
@@ -53,7 +33,7 @@ exports.login = functions.https.onCall(async (data, context) => {
 })
 
 exports.topic = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context, context.auth.uid)
+  await Sentry.setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
@@ -102,7 +82,7 @@ exports.topic = functions.https.onCall(async (data, context) => {
 })
 
 exports.resource = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context, context.auth.uid)
+  await Sentry.setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {

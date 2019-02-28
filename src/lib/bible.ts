@@ -1,28 +1,13 @@
 import * as functions from 'firebase-functions'
-import { defaultApp as admin } from '../db'
+// import * as Sentry from '../sentry'
+import logger from '../logging'
 const bcv_parser = require('bible-passage-reference-parser/js/en_bcv_parser').bcv_parser
 const htmlToText = require('html-to-text')
 const axios = require('axios')
 
-const Sentry = require('@sentry/node')
-Sentry.init({
-  dsn: 'https://d3d741dcf97f43969ea1cb4416073960@sentry.io/1373107',
-  environment: JSON.parse(process.env.FIREBASE_CONFIG).projectId === 'real-45953' ? 'prod' : 'staging'
-})
-Sentry.configureScope(scope => {
-  scope.setTag('function', 'bible')
-})
-
-async function setSentryUser(context) {
-  const user = await admin.auth().getUser(context.auth.uid)
-  return Sentry.configureScope(scope => {
-    scope.setUser({
-      email: user.email,
-      id: context.auth.uid,
-      username: user.displayName,
-      ip_address: context.rawRequest.ip
-    })
-  })
+const Sentry = {
+  captureException (c) { return },
+  addBreadcrumb (b) { return }
 }
 
 const versionList = {
@@ -73,21 +58,35 @@ function getESV(parsedRef, version) {
 
 function getDBP(parsedRef, version) {
   const ver = version.toUpperCase()
-  const otnt = otBooks.indexOf(parsedRef.osis().split('.')[0]) > -1 ? 'O' : ntBooks.indexOf(parsedRef.osis().split('.')[0]) > -1 ? 'N' : Sentry.captureException(Error('Cloud Function (bibleText) - DBP book not found, ot/nt'))
+  const otnt = otBooks.indexOf(parsedRef.osis().split('.')[0]) > -1 ? 'O' : ntBooks.indexOf(parsedRef.osis().split('.')[0]) > -1 ? 'N' : false
+  if (!otnt) {
+    logger.error('Cloud Function (bibleText) - DBP book not found, ot/nt')
+    Sentry.captureException(Error('Cloud Function (bibleText) - DBP book not found, ot/nt'))
+    return false
+  }
   if (parsedRef.entities[0].type === 'sequence') {
     // Handle sequence of verses
+    logger.error('Cloud Function (bibleText) - DBP sequences not handled')
     Sentry.captureException(Error('Cloud Function (bibleText) - DBP sequences not handled'))
   } else if (parsedRef.entities[0].type === 'range') {
     // Handle range of verses
-    // console.log('dbp-range')
+    logger.info('dbp-range')
     if (parsedRef.entities[0].passages[0].start.b === parsedRef.entities[0].passages[0].end.b) {
       if (parsedRef.entities[0].passages[0].start.c === parsedRef.entities[0].passages[0].end.c) {
         const url = 'http://dbt.io/text/verse?key=' + functions.config().dbp.key + '&dam_id=ENG' + ver + otnt + '2ET&book_id=' + parsedRef.entities[0].passages[0].start.b + '&chapter_id=' + parsedRef.entities[0].passages[0].start.c + '&verse_start=' + parsedRef.entities[0].passages[0].start.v + '&verse_end=' + parsedRef.entities[0].passages[0].end.v + '&v=2'
-        // console.log('url', url)
-        return axios.get(url).catch((err) => {
-          Sentry.captureException(err)
-          // console.error(err)
-          return false
+        logger.info('url', url)
+        return axios.get(url)
+          .then((data) => {
+            // logger.info('dbp-data', data.data.map(e => { return e.verse_text }).join(' '))
+            return {
+              parse: parsedRef,
+              text: data.data.map(e => { return e.verse_text }).join(' ')
+            }
+          })
+          .catch((err) => {
+            logger.error(err)
+            Sentry.captureException(err)
+            return false
         })
       } else {
         let currentChapter = parsedRef.entities[0].passages[0].start.c
@@ -95,9 +94,9 @@ function getDBP(parsedRef, version) {
         queries.push(axios.get('http://dbt.io/text/verse?key=' + functions.config().dbp.key + '&dam_id=ENG' + ver + otnt + '2ET&book_id=' + parsedRef.entities[0].passages[0].start.b + '&chapter_id=' + parsedRef.entities[0].passages[0].start.c + '&verse_start=' + parsedRef.entities[0].passages[0].start.v + '&verse_end=1000&v=2'))
         currentChapter++
         for (; currentChapter < parsedRef.entities[0].passages[0].end.c; currentChapter++) {
-          // console.log('loop for chapter ' + currentChapter)
+          logger.info('loop for chapter ' + currentChapter)
           const url = 'http://dbt.io/text/verse?key=' + functions.config().dbp.key + '&dam_id=ENG' + ver + otnt + '2ET&book_id=' + parsedRef.entities[0].passages[0].start.b + '&chapter_id=' + currentChapter + '&v=2'
-          // console.log('url', url)
+          logger.info('url', url)
           queries.push(axios.get(url))
         }
         queries.push(axios.get('http://dbt.io/text/verse?key=' + functions.config().dbp.key + '&dam_id=ENG' + ver + otnt + '2ET&book_id=' + parsedRef.entities[0].passages[0].start.b + '&chapter_id=' + parsedRef.entities[0].passages[0].end.c + '&verse_start=1&verse_end=' + parsedRef.entities[0].passages[0].end.v + '&v=2'))
@@ -109,22 +108,23 @@ function getDBP(parsedRef, version) {
             }
           }))
           .catch(err => {
+            logger.error(err)
             Sentry.captureException(err)
             return false
           })
       }
     } else {
+      logger.error('dbp: books in range don\'t match...')
       Sentry.captureException(Error('Cloud Functions (bibleText) - DBP books in range don\'t match'))
-      console.error('dbp: books in range don\'t match...')
       return false
     }
   } else if (parsedRef.entities[0].type === 'bcv') {
     // Handle individual verse
     const url = 'http://dbt.io/text/verse?key=' + functions.config().dbp.key + '&dam_id=ENG' + ver + otnt + '2ET&book_id=' + parsedRef.entities[0].passages[0].start.b + '&chapter_id=' + parsedRef.entities[0].passages[0].start.c + '&verse_start=' + parsedRef.entities[0].passages[0].start.v + '&v=2'
-    // console.log('url', url)
+    logger.info('url', url)
     return axios.get(url)
       .then((data) => {
-        // console.log('dbp-data', data.data.map(e => { return e.verse_text }).join(' '))
+        // logger.info('dbp-data', data.data.map(e => { return e.verse_text }).join(' '))
         return {
           parse: parsedRef,
           text: data.data.map(e => { return e.verse_text }).join(' ')
@@ -155,10 +155,10 @@ function getNET(parsedRef, version) {
     // Return formatted ref
     formattedRef = parsedRef.osis().split('.')[0] + '+' + parsedRef.osis().split('.').slice(1).join('.')
   }
-  // console.log(formattedRef)
+  // logger.info(formattedRef)
   return axios.get('http://labs.bible.org/api/?passage=' + formattedRef + '&formatting=plain')
     .then((data) => {
-      // console.log('net-data', data.data)
+      // logger.info('net-data', data.data)
       let text = data.data.replace(/\d:\d+ /g, '')
       text = text.replace(/ +\d+/g, '')
       return {
@@ -176,7 +176,7 @@ function getBiblia(parsedRef, version) {
   const ver = version.toUpperCase()
   return axios.get('https://api.biblia.com/v1/bible/content/' + ver + '.html?passage=' + parsedRef.osis() + '&key=' + functions.config().biblia.key + '&style=bibleTextOnly')
     .then((data) => {
-      console.log('leb-data', data.data)
+      logger.info('leb-data', data.data)
       return {
         parse: parsedRef,
         text: htmlToText.fromString(data.data)
@@ -203,15 +203,16 @@ function getNLT(parsedRef, version) {
 }
 
 exports.bibleText = functions.https.onCall(async (data, context) => {
-  await setSentryUser(context)
+  // await Sentry.setSentryUser(context)
   if (!context.auth) {
+    logger.error('Cloud Function (bibleText) - The function must be called while authenticated')
     Sentry.captureException(Error('Cloud Function (bibleText) - The function must be called while authenticated'))
-    throw new functions.https.HttpsError('failed-precondition', 'The function must be called while authenticated.');
+    return false
   }
   // functions.config().someservice.id
   const ref = data.bibleRef
   const version = data.version
-  console.log('ref', ref)
+  logger.info('ref', ref)
 
   const bcv = new bcv_parser
   const parsedRef = bcv.parse(ref)
@@ -233,6 +234,7 @@ exports.bibleText = functions.https.onCall(async (data, context) => {
   //   }
   // })
   if (Object.keys(versionList).indexOf(version) === -1) {
+    logger.error(`Cloud Function (bibleText) - ${version} version invalid`)
     Sentry.captureException(Error(`Cloud Function (bibleText) - ${version} version invalid`))
     return false
   }
@@ -257,6 +259,7 @@ exports.bibleText = functions.https.onCall(async (data, context) => {
       return finalData
     })
     .catch((err) => {
+      logger.error(err)
       Sentry.captureException(err)
       return {
         err: err
