@@ -13,9 +13,9 @@ const logger = winston.createLogger({
 
 export default {
   info: function (...args : any[]) {
-    logger.info(args.join(' | '))
+    logger.info(args[0], { ...args })
   },
   error: function (...args : any[]) {
-    logger.error(args.join(' | '))
+    logger.error(args[0], { ...args })
   }
 }
