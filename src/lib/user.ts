@@ -22,11 +22,13 @@ const messageApp = {
     },
     messageStructure: {
       hook: true,
+      bible: true,
       application: true,
       prayer: true
     },
     structureNames: {
       application: "Application",
+      bible: "Bible",
       hook: "Hook",
       prayer: "Prayer"
     },
