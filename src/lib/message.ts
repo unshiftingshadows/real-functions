@@ -62,6 +62,7 @@ function defaultContent (type: ContentTypes) {
         ownedBy: '',
         prefs: {
           hook: true,
+          bible: true,
           application: true,
           prayer: true
         },
@@ -170,6 +171,10 @@ const defaultHook = {
   moduleOrder: []
 }
 
+const defaultBible = {
+  moduleOrder: true
+}
+
 const defaultApplication = {
   pos: 'after',
   title: '',
@@ -216,6 +221,7 @@ async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, c
     batch.set(contentRef, contentObj)
     if (type === 'message') {
       batch.set(contentRef.collection('structure').doc('hook'), defaultHook)
+      batch.set(contentRef.collection('bible').doc('bible'), defaultBible)
       batch.set(contentRef.collection('structure').doc('application'), defaultApplication)
       batch.set(contentRef.collection('structure').doc('prayer'), defaultPrayer)
     }
@@ -348,6 +354,14 @@ interface HistoryChange {
 }
 
 async function addHistory (change, context, type) {
+  try {
+    const message = await admin.firestore().collection('messageMessage').doc(context.params.messageid).get()
+    if (!message.exists) {
+      return Promise.reject()
+    }
+  } catch (err) {
+    return Promise.reject()
+  }
   const document = change.after.exists ? change.after.data() : null
   const prevDoc = change.before.exists ? change.before.data() : null
   const uid = document && document.editing ? document.editing : prevDoc && prevDoc.editing ? prevDoc.editing : ''
@@ -364,7 +378,7 @@ async function addHistory (change, context, type) {
     newVal: document,
     prevVal: prevDoc
   }
-  admin.firestore().collection(`messageMessage`).doc(docid).collection('history').add(modChange).then(() => {
+  return admin.firestore().collection(`messageMessage`).doc(docid).collection('history').add(modChange).then(() => {
     return Sentry.addBreadcrumb({
       category: 'message',
       message: `Cloud Function (history-${type}) - message history point added successful: ${docid} - ${action}`,
