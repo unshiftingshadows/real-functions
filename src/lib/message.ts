@@ -389,6 +389,27 @@ async function addHistory (change, context, type) {
   })
 }
 
+function setIndex (type, data) {
+  const updates = {
+    title: data.title,
+    tags: data.tags.join(','),
+    bibleRefs: data.bibleRefs.join(','),
+    text: data.text || ''
+  }
+  const proms = data.users ? data.users.map(e => { return admin.database().ref(`index/${e}/${type}/${data.id}`).update(updates) }) : admin.database().ref(`index/${data.user}/${type}/${data.id}`).update(updates)
+  return Promise.all(proms)
+}
+
+exports.messageIndex = functions.firestore.document('messageMessage/{messageid}').onWrite((change, context) => { return setIndex('message', { id: context.params.messageid, ...change.after.data() }) })
+exports.seriesIndex = functions.firestore.document('messageSeries/{seriesid}').onWrite((change, context) => { return setIndex('series', { id: context.params.seriesid, ...change.after.data() }) })
+exports.scratchIndex = functions.firestore.document('messageScratch/{scratchid}').onWrite((change, context) => { return setIndex('scratch', { id: context.params.scratchid, ...change.after.data() }) })
+
+exports.quoteIndex = functions.firestore.document('messageQuote/{quoteid}').onWrite((change, context) => { return setIndex('quote', { id: context.params.quoteid, ...change.after.data() }) })
+exports.imageIndex = functions.firestore.document('messageImage/{imageid}').onWrite((change, context) => { return setIndex('image', { id: context.params.imageid, ...change.after.data() }) })
+exports.videoIndex = functions.firestore.document('messageVideo/{videoid}').onWrite((change, context) => { return setIndex('video', { id: context.params.videoid, ...change.after.data() }) })
+exports.lyricIndex = functions.firestore.document('messageLyric/{lyricid}').onWrite((change, context) => { return setIndex('lyric', { id: context.params.lyricid, ...change.after.data() }) })
+exports.illustrationIndex = functions.firestore.document('messageIllustration/{illustrationid}').onWrite((change, context) => { return setIndex('illustration', { id: context.params.illustrationid, ...change.after.data() }) })
+
 exports.historyModules = functions.firestore.document('messageMessage/{messageid}/modules/{moduleid}').onWrite((change, context) => { return addHistory(change, context, 'module') })
 exports.historySections = functions.firestore.document('messageMessage/{messageid}/sections/{sectionid}').onWrite((change, context) => { return addHistory(change, context, 'section') })
 exports.historyStructure = functions.firestore.document('messageMessage/{messageid}/structure/{structureid}').onWrite((change, context) => { return addHistory(change, context, 'structure') })
