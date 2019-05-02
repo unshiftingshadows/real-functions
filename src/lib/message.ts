@@ -3,7 +3,7 @@ import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, firestore, storage } from '../db'
 import { sendEmail } from './email'
 import { Notification, addNotification, NotificationAction } from './notifications'
-import * as Sentry from '../sentry'
+// import * as Sentry from '../sentry'
 // import { DocumentReference } from '@google-cloud/firestore';
 // import { Fuse } from 'fuse.js'
 const Fuse = require('fuse.js')
@@ -195,7 +195,7 @@ const defaultPrayer = {
 }
 
 async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, context: functions.EventContext, type: ContentTypes) {
-  await Sentry.setSentryUser(context, snap.data().createdBy)
+  // await Sentry.setSentryUser(context, snap.data().createdBy)
   const initData = snap.data()
   const contentRef = snap.ref
 
@@ -221,19 +221,20 @@ async function createContentHandler (snap: FirebaseFirestore.DocumentSnapshot, c
     batch.set(contentRef, contentObj)
     if (type === 'message') {
       batch.set(contentRef.collection('structure').doc('hook'), defaultHook)
-      batch.set(contentRef.collection('bible').doc('bible'), defaultBible)
+      batch.set(contentRef.collection('structure').doc('bible'), defaultBible)
       batch.set(contentRef.collection('structure').doc('application'), defaultApplication)
       batch.set(contentRef.collection('structure').doc('prayer'), defaultPrayer)
     }
-    Sentry.addBreadcrumb({
-      category: 'message',
-      message: `Cloud Function (createContent) - ${type} content added successfully`,
-      level: 'info'
-    })
-    return batch.commit().catch(err => { Sentry.captureException(err) })
+    // Sentry.addBreadcrumb({
+    //   category: 'message',
+    //   message: `Cloud Function (createContent) - ${type} content added successfully`,
+    //   level: 'info'
+    // })
+    return batch.commit()
+    // .catch(err => { Sentry.captureException(err) })
   }
 
-  Sentry.captureException(Error(`Cloud Function (createContent) - Unsupported content type ${type}`))
+  // Sentry.captureException(Error(`Cloud Function (createContent) - Unsupported content type ${type}`))
   return Promise.reject('Unsupported content type')
 }
 
@@ -272,7 +273,7 @@ exports.addScratch = functions.firestore.document('messageScratch/{id}').onCreat
 // exports.addLyric = functions.firestore.document('messageLyric/{id}').onCreate((snap, context) => { return createMediaHandler(snap, context, 'lyric') })
 
 async function deleteContentHandler (snap, context, type) {
-  await Sentry.setSentryUser(context, '')
+  // await Sentry.setSentryUser(context, '')
   // All subcollection paths
   const paths = []
   paths.push(`${snap.ref.path}/structure`)
@@ -282,14 +283,14 @@ async function deleteContentHandler (snap, context, type) {
   return Promise.all(paths.map((path) => {
     return deleteCollection(firestore, path, 10)
   }))
-  .then(() => {
-    return Sentry.addBreadcrumb({
-      category: 'message',
-      message: `Cloud Function (deleteContent) - ${type} content deleted successfully`,
-      level: 'info'
-    })
-  })
-  .catch(err => { Sentry.captureException(err) })
+  // .then(() => {
+  //   return Sentry.addBreadcrumb({
+  //     category: 'message',
+  //     message: `Cloud Function (deleteContent) - ${type} content deleted successfully`,
+  //     level: 'info'
+  //   })
+  // })
+  // .catch(err => { Sentry.captureException(err) })
 }
 
 exports.removeSeries = functions.firestore.document('messageSeries/{id}').onDelete((snap, context) => { return deleteContentHandler(snap, context, 'series') })
@@ -302,7 +303,8 @@ function deleteCollection(db, collectionPath, batchSize) {
 
   return new Promise((resolve, reject) => {
     deleteQueryBatch(db, query, batchSize, resolve, reject)
-  }).catch(err => { Sentry.captureException(err) })
+  })
+  // .catch(err => { Sentry.captureException(err) })
 }
 
 function deleteQueryBatch(db, query, batchSize, resolve, reject) {
@@ -334,7 +336,7 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
         deleteQueryBatch(db, query, batchSize, resolve, reject);
       })
     }).catch(err => {
-      Sentry.captureException(err)
+      // Sentry.captureException(err)
       reject(err)
     })
 }
@@ -365,7 +367,7 @@ async function addHistory (change, context, type) {
   const document = change.after.exists ? change.after.data() : null
   const prevDoc = change.before.exists ? change.before.data() : null
   const uid = document && document.editing ? document.editing : prevDoc && prevDoc.editing ? prevDoc.editing : ''
-  await Sentry.setSentryUser(context, uid)
+  // await Sentry.setSentryUser(context, uid)
   const docid = context.params.messageid
   const action = document === null ? 'remove' : prevDoc === null ? 'add' : 'edit'
   const modChange: HistoryChange = {
@@ -378,15 +380,16 @@ async function addHistory (change, context, type) {
     newVal: document,
     prevVal: prevDoc
   }
-  return admin.firestore().collection(`messageMessage`).doc(docid).collection('history').add(modChange).then(() => {
-    return Sentry.addBreadcrumb({
-      category: 'message',
-      message: `Cloud Function (history-${type}) - message history point added successful: ${docid} - ${action}`,
-      level: 'info'
-    })
-  }).catch(err => {
-    return Sentry.captureException(err)
-  })
+  return admin.firestore().collection(`messageMessage`).doc(docid).collection('history').add(modChange)
+  // .then(() => {
+  //   return Sentry.addBreadcrumb({
+  //     category: 'message',
+  //     message: `Cloud Function (history-${type}) - message history point added successful: ${docid} - ${action}`,
+  //     level: 'info'
+  //   })
+  // }).catch(err => {
+  //   return Sentry.captureException(err)
+  // })
 }
 
 function setIndex (type, data) {
@@ -415,7 +418,7 @@ exports.historySections = functions.firestore.document('messageMessage/{messagei
 exports.historyStructure = functions.firestore.document('messageMessage/{messageid}/structure/{structureid}').onWrite((change, context) => { return addHistory(change, context, 'structure') })
 
 exports.searchMedia = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   const searchTerms = data.searchTerms
   const searchTypes = data.searchTypes
   const uid = context.auth.uid
@@ -456,15 +459,15 @@ exports.searchMedia = functions.https.onCall(async (data, context) => {
       })
     })
     const fuse = new Fuse(media, searchOptions)
-    Sentry.addBreadcrumb({
-      category: 'message',
-      message: `Cloud Function (searchMedia) - search successful: ${searchTerms}`,
-      level: 'info'
-    })
+    // Sentry.addBreadcrumb({
+    //   category: 'message',
+    //   message: `Cloud Function (searchMedia) - search successful: ${searchTerms}`,
+    //   level: 'info'
+    // })
     return { searchTerms: searchTerms, searchTypes: searchTypes, uid: uid, results: fuse.search(searchTerms) }
   })
   .catch((err) => {
-    Sentry.captureException(err)
+    // Sentry.captureException(err)
     return { message: 'Some error in searching', err: err }
   })
 })
@@ -490,10 +493,12 @@ async function addDocUser (docType, docid: string, users: string[], originuid: s
           sharedWith: fbAdmin.firestore.FieldValue.arrayUnion( ...users )
         })
         await batch.commit()
+        // return true
       } catch (err) {
         simpleLog('addDocUse - series messages updates failed')
         console.error(err)
-        return Sentry.captureException(err)
+        // return false
+        // return Sentry.captureException(err)
       }
     }
     if (docType === 'message') {
@@ -513,12 +518,14 @@ async function addDocUser (docType, docid: string, users: string[], originuid: s
     } catch (err) {
       simpleLog('addDocUser - add notification failed')
       console.error(err)
-      return Sentry.captureException(err)
+      // return Sentry.captureException(err)
+      return false
     }
   }).catch(err => {
     simpleLog('addDocUser - document update failed')
     console.error(err)
-    return Sentry.captureException(err)
+    return false
+    // return Sentry.captureException(err)
   })
 }
 
@@ -539,7 +546,7 @@ async function addTempUser (email: string, inviteduid: string, docType: string, 
         return { status: 200, message: 'New user invited!' }
       })
       .catch(err => {
-        Sentry.captureException(err)
+        // Sentry.captureException(err)
         simpleLog('addTempUser - Error sending new user email')
         console.error(err)
         return { status: 400, message: 'Error sending new user email', err }
@@ -549,7 +556,7 @@ async function addTempUser (email: string, inviteduid: string, docType: string, 
   } catch (err) {
     simpleLog('addTempUser - adding user failed')
     console.error(err)
-    await Sentry.captureException(err)
+    // await Sentry.captureException(err)
     return false
   }
 }
@@ -571,7 +578,7 @@ function isUser (email: string) {
 
 exports.shareDoc = functions.https.onCall(async ({ docType, docid, emails }, context) => {
   simpleLog('before set sentry')
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   simpleLog('after set sentry')
   let users: string[] = []
   let newEmails: string[] = []
@@ -608,7 +615,7 @@ exports.shareDoc = functions.https.onCall(async ({ docType, docid, emails }, con
   }).catch((error) => {
     simpleLog('shareDoc - finding user failed', error)
     console.error(error)
-    Sentry.captureException(error)
+    // Sentry.captureException(error)
     emailError = true
   })
   if (emailError) {
@@ -655,7 +662,7 @@ exports.archiveMessage = functions.https.onRequest(async (req, res) => {
 })
 
 exports.restoreMessage = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   const id = data.id
   const uid = context.auth.uid
   if (!uid) {

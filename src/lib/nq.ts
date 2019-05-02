@@ -1,39 +1,39 @@
 import * as functions from 'firebase-functions';
 import { auth, nqAuth, nqFirestore } from '../db';
-import * as Sentry from '../sentry'
+// import * as Sentry from '../sentry'
 
 const snippetTypes = [ 'quote', 'idea', 'illustration', 'outline' ]
 
 exports.login = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
       const nquid = data.uid
       try {
         const token = await nqAuth.createCustomToken(nquid)
-        Sentry.addBreadcrumb({
-          category: 'nq',
-          message: 'Cloud Function (login) - NQ login successful',
-          level: 'info'
-        })
+        // Sentry.addBreadcrumb({
+        //   category: 'nq',
+        //   message: 'Cloud Function (login) - NQ login successful',
+        //   level: 'info'
+        // })
         return { status: true, token }
       } catch (error) {
-        Sentry.captureException(error)
+        // Sentry.captureException(error)
         return { status: false, error }
       }
     } else {
-      Sentry.captureException(Error('invalid credentials - not REAL Admin user'))
+      // Sentry.captureException(Error('invalid credentials - not REAL Admin user'))
       return { status: false, error: Error('invalid credentials - not REAL Admin user') }
     }
   } catch (error) {
-    Sentry.captureException(error)
+    // Sentry.captureException(error)
     return { status: false, error }
   }
 })
 
 exports.topic = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
@@ -69,20 +69,20 @@ exports.topic = functions.https.onCall(async (data, context) => {
 
       const joined = await topicData.map((e, index) => { return {...e, resources: midResources[index]} })
 
-      Sentry.captureMessage('Cloud Function (topic) - NQ topic pulled successfully')
+      // Sentry.captureMessage('Cloud Function (topic) - NQ topic pulled successfully')
       return { joined }
     } else {
-      Sentry.captureMessage('Cloud Function (topic) - NQ topic not authorized')
+      // Sentry.captureMessage('Cloud Function (topic) - NQ topic not authorized')
       return false
     }
   } catch (error) {
-    Sentry.captureException(error)
+    // Sentry.captureException(error)
     return false
   }
 })
 
 exports.resource = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   try {
     const userRecord = await auth.getUser(context.auth.uid)
     if ((userRecord.customClaims as any).realAdmin) {
@@ -104,16 +104,16 @@ exports.resource = functions.https.onCall(async (data, context) => {
 
       console.log('mediaData', mediaData)
 
-      Sentry.captureMessage('Cloud Function (resource) - NQ resource pulled successfully')
+      // Sentry.captureMessage('Cloud Function (resource) - NQ resource pulled successfully')
       return { resources: resources.map((e, index) => {
         return { ...resourceList[index], media: snippetTypes.indexOf(resourceList[index].type) > -1 ? {...e, media: mediaData[index]} : e }
       })}
     } else {
-      Sentry.captureMessage('Cloud Function (resource) - NQ resource not authorized')
+      // Sentry.captureMessage('Cloud Function (resource) - NQ resource not authorized')
       return false
     }
   } catch (error) {
-    Sentry.captureException(error)
+    // Sentry.captureException(error)
     return false
   }
 })

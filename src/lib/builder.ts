@@ -1,6 +1,6 @@
 import * as functions from 'firebase-functions';
 import { defaultApp as admin, firestore, log } from '../db';
-import * as Sentry from '../sentry'
+// import * as Sentry from '../sentry'
 
 const defaultDevo = {
   editing: false,
@@ -57,7 +57,7 @@ const defaultPrayer = {
 const guideTypes = [ 'lecture', 'discussion', 'question', 'answer', 'expositional' ]
 
 exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onCreate(async (snap, context) => {
-  await Sentry.setSentryUser(context, snap.data().editing)
+  // await Sentry.setSentryUser(context, snap.data().editing)
   log('builder', {
     category: 'content',
     action: 'create',
@@ -102,18 +102,18 @@ exports.addLesson = functions.firestore.document('curriculumEdit/{seriesid}/less
   reviewBatch.set(reviewRef.doc('review'), defaultReview)
 
   return Promise.all([devoBatch.commit(), guideBatch.commit(), reviewBatch.commit(), devoContentBatch.commit(), guideContentBatch.commit()])
-    .then(() => {
-      Sentry.addBreadcrumb({
-        category: 'builder',
-        message: `Cloud Function (addLesson) - lesson added successfully: ${snap.ref.id}`,
-        level: 'info'
-      })
-    })
-    .catch(err => { Sentry.captureException(err) })
+    // .then(() => {
+    //   Sentry.addBreadcrumb({
+    //     category: 'builder',
+    //     message: `Cloud Function (addLesson) - lesson added successfully: ${snap.ref.id}`,
+    //     level: 'info'
+    //   })
+    // })
+    // .catch(err => { Sentry.captureException(err) })
 })
 
 exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/lessons/{lessonid}').onDelete(async (snap, context) => {
-  await Sentry.setSentryUser(context, '')
+  // await Sentry.setSentryUser(context, '')
   log('builder', {
     category: 'content',
     action: 'remove',
@@ -149,13 +149,14 @@ exports.removeLesson = functions.firestore.document('curriculumEdit/{seriesid}/l
 
   return Promise.all(paths.map((path) => {
     return deleteCollection(firestore, path, 10)
-  })).then(() => {
-    Sentry.addBreadcrumb({
-      category: 'builder',
-      message: `Cloud Function (removeLesson) - lesson removed successfully: ${snap.ref.id}`,
-      level: 'info'
-    })
-  }).catch(err => { Sentry.captureException(err) })
+  }))
+  // .then(() => {
+  //   Sentry.addBreadcrumb({
+  //     category: 'builder',
+  //     message: `Cloud Function (removeLesson) - lesson removed successfully: ${snap.ref.id}`,
+  //     level: 'info'
+  //   })
+  // }).catch(err => { Sentry.captureException(err) })
 })
 
 function deleteCollection(db, collectionPath, batchSize) {
@@ -164,7 +165,8 @@ function deleteCollection(db, collectionPath, batchSize) {
 
   return new Promise((resolve, reject) => {
     deleteQueryBatch(db, query, batchSize, resolve, reject)
-  }).catch(err => { Sentry.captureException(err) })
+  })
+  // .catch(err => { Sentry.captureException(err) })
 }
 
 function deleteQueryBatch(db, query, batchSize, resolve, reject) {
@@ -197,7 +199,7 @@ function deleteQueryBatch(db, query, batchSize, resolve, reject) {
       })
     })
     .catch(err => {
-      Sentry.captureException(err)
+      // Sentry.captureException(err)
       reject(err)
     })
 }

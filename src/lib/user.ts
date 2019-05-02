@@ -3,7 +3,7 @@ import * as fbAdmin from 'firebase-admin'
 import { defaultApp as admin, auth, firestore } from '../db'
 import { sendEmail } from './email'
 import { APP } from './notifications';
-import * as Sentry from '../sentry'
+// import * as Sentry from '../sentry'
 
 // Message pref defaults
 const messageApp = {
@@ -74,9 +74,9 @@ const appDefaults = {
  * @param apps can add default prefs for any number of apps upon registering
  */
 exports.adminAddUser = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   if (context.auth.token.realAdmin !== true) {
-    Sentry.captureMessage(`Cloud Function (adminAddUser) not authorized | uid: ${context.auth.uid}`)
+    // Sentry.captureMessage(`Cloud Function (adminAddUser) not authorized | uid: ${context.auth.uid}`)
     return {
       error: "Request not authorized"
     }
@@ -97,17 +97,17 @@ exports.adminAddUser = functions.https.onCall(async (data, context) => {
             return { status: 200, message: 'New user data added!' }
           })
           .catch(err => {
-            Sentry.captureException(err)
+            // Sentry.captureException(err)
             console.error('Error sending new user email', err)
             return { status: 400, message: 'Error sending new user email', err }
           })
       }).catch((err) => {
-        Sentry.captureException(err)
+        // Sentry.captureException(err)
         console.error('Error adding new user data', err)
         return { status: 400, message: 'Error adding new user data', err }
       })
   }).catch((err) => {
-    Sentry.captureException(err)
+    // Sentry.captureException(err)
     console.error('Error creating new user: ', err)
     return { status: 400, message: 'Error creating new user', err }
   })
@@ -124,9 +124,9 @@ exports.adminAddUser = functions.https.onCall(async (data, context) => {
  * @param app can add default prefs for a specific app upon registering
  */
 exports.addUser = functions.https.onRequest((request, response) => {
-  Sentry.configureScope(request.ip)
+  // Sentry.configureScope(request.ip)
   if (request.body.email === '' || request.body.email === null || request.body.email === undefined) {
-    Sentry.captureException(Error('Cloud Function (addUser) - no email'))
+    // Sentry.captureException(Error('Cloud Function (addUser) - no email'))
     response.status(400).send('Error - no email')
     return
   }
@@ -139,22 +139,22 @@ exports.addUser = functions.https.onRequest((request, response) => {
     emailVerified: true
   }).then((userRecord) => {
     addUserData(userRecord.uid, request.body.name, request.body.email, [request.body.app], true, request.body.churchid).then(() => {
-      Sentry.addBreadcrumb({
-        category: 'auth',
-        message: 'New user created (https request)',
-        level: 'info'
-      })
+      // Sentry.addBreadcrumb({
+      //   category: 'auth',
+      //   message: 'New user created (https request)',
+      //   level: 'info'
+      // })
       console.log('New user data added!', userRecord.email)
       response.send('New user added!')
       return
     }).catch((err) => {
-      Sentry.captureException(err)
+      // Sentry.captureException(err)
       console.error('Error adding new user data', err)
       response.status(400).send('Error adding new user data')
       return
     })
   }).catch((err) => {
-    Sentry.captureException(err)
+    // Sentry.captureException(err)
     console.error('Error creating new user: ', err)
     response.status(400).send('Error creating new user')
     return
@@ -163,16 +163,16 @@ exports.addUser = functions.https.onRequest((request, response) => {
 
 exports.addUserData = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
-    Sentry.captureMessage(`Cloud Function (addUserData) not authorized...`)
+    // Sentry.captureMessage(`Cloud Function (addUserData) not authorized...`)
     return {
       error: 'Request not authorized'
     }
   }
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   return addUserData(context.auth.uid, data.name, data.email, [data.app], false, data.churchid).then(() => {
     return { message: 'Success!' }
   }).catch(err =>{
-    Sentry.captureException(err)
+    // Sentry.captureException(err)
     return { message: 'Failed', err }
   })
 })
@@ -237,27 +237,27 @@ exports.newUserCheck = functions.auth.user().onCreate(async (user) => {
  * and use any of the REAL Church apps without having to re-login
  */
 exports.appAuth = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   const uid = context.auth.uid
 
   if (uid !== null) {
     return auth.createCustomToken(uid).then((customToken) => {
-      Sentry.addBreadcrumb({
-        category: 'auth',
-        message: `Cloud Function (appAuth) authorized user | ${uid}`,
-        level: 'info'
-      })
+      // Sentry.addBreadcrumb({
+      //   category: 'auth',
+      //   message: `Cloud Function (appAuth) authorized user | ${uid}`,
+      //   level: 'info'
+      // })
       return { customToken: customToken, uid: uid, status: 'success' }
     }).catch((err) => {
-      Sentry.captureException(err)
+      // Sentry.captureException(err)
       return { err: err, uid: uid, status: 'error' }
     })
   } else {
-    Sentry.addBreadcrumb({
-      category: 'auth',
-      message: 'Cloud Function (appAuth) no uid',
-      level: 'info'
-    })
+    // Sentry.addBreadcrumb({
+    //   category: 'auth',
+    //   message: 'Cloud Function (appAuth) no uid',
+    //   level: 'info'
+    // })
     return { uid: uid, status: 'nouid' }
   }
 })
@@ -269,7 +269,7 @@ exports.appAuth = functions.https.onCall(async (data, context) => {
  * @param appName app to be added to user's prefs
  */
 exports.appAdd = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   const uid = context.auth.uid
   const appName = data.appName
 
@@ -278,19 +278,19 @@ exports.appAdd = functions.https.onCall(async (data, context) => {
   if (Object.keys(appDefaults).indexOf(appName) !== -1) {
     newData[appName] = appDefaults[appName]
   } else {
-    Sentry.captureException(Error('Cloud Function (appAdd) - app name invalid'))
+    // Sentry.captureException(Error('Cloud Function (appAdd) - app name invalid'))
     return Promise.reject('App name invalid')
   }
 
   if (uid !== null) {
-    Sentry.addBreadcrumb({
-      category: 'auth',
-      message: `Cloud Function (appAdd) added app ${appName} | uid ${uid}`,
-      level: 'info'
-    })
+    // Sentry.addBreadcrumb({
+    //   category: 'auth',
+    //   message: `Cloud Function (appAdd) added app ${appName} | uid ${uid}`,
+    //   level: 'info'
+    // })
     return firestore.collection('user').doc(uid).update(newData)
   } else {
-    Sentry.captureException(Error('Cloud Function (appAdd) - uid invalid'))
+    // Sentry.captureException(Error('Cloud Function (appAdd) - uid invalid'))
     return Promise.reject('Uid invalid')
   }
 })
@@ -321,20 +321,20 @@ async function grantRealAdminRole(email: string): Promise<void> {
  * @returns {Promise<void>} resolves promise once the claim is set
  */
 exports.addReal = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   if (context.auth.token.realAdmin !== true) {
-    Sentry.captureMessage(`Cloud Function (addReal) not authorized | uid: ${context.auth.uid}`)
+    // Sentry.captureMessage(`Cloud Function (addReal) not authorized | uid: ${context.auth.uid}`)
     return {
       error: "Request not authorized"
     }
   }
   const email = data.email
   return grantRealAdminRole(email).then(() => {
-    Sentry.addBreadcrumb({
-      category: 'auth',
-      message: `Cloud Function (addReal) added real admin | email ${email}`,
-      level: 'info'
-    })
+    // Sentry.addBreadcrumb({
+    //   category: 'auth',
+    //   message: `Cloud Function (addReal) added real admin | email ${email}`,
+    //   level: 'info'
+    // })
     return {
       result: `Request fulfilled! ${email} is now a REAL Admin`
     }
@@ -367,9 +367,9 @@ async function grantChurchAdminRole(email: string, churchid: string): Promise<vo
  * @returns {Promise<void>} promise resolves after claim is set
  */
 exports.addAdmin = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   if (context.auth.token.realAdmin !== true && context.auth.token.churchAdmin !== data.churchid) {
-    Sentry.captureMessage(`Cloud Function (addAdmin) not authorized | uid: ${context.auth.uid}`)
+    // Sentry.captureMessage(`Cloud Function (addAdmin) not authorized | uid: ${context.auth.uid}`)
     return {
       error: 'Request not authorized'
     }
@@ -377,11 +377,11 @@ exports.addAdmin = functions.https.onCall(async (data, context) => {
   const email = data.email
   const churchid = data.churchid
   return grantChurchAdminRole(email, churchid).then(() => {
-    Sentry.addBreadcrumb({
-      category: 'auth',
-      message: `Cloud Function (addAdmin) added church admin | email ${email} churchid ${churchid}`,
-      level: 'info'
-    })
+    // Sentry.addBreadcrumb({
+    //   category: 'auth',
+    //   message: `Cloud Function (addAdmin) added church admin | email ${email} churchid ${churchid}`,
+    //   level: 'info'
+    // })
     return {
       result: `Request fulfilled! ${email} is now a Church Admin`
     }
@@ -389,9 +389,9 @@ exports.addAdmin = functions.https.onCall(async (data, context) => {
 })
 
 exports.getDisplayName = functions.https.onCall(async (data, context) => {
-  await Sentry.setSentryUser(context, context.auth.uid)
+  // await Sentry.setSentryUser(context, context.auth.uid)
   if (!context.auth) {
-    Sentry.captureMessage(`Cloud Function (getDisplayName) not authorized | uid: ${context.auth.uid}`)
+    // Sentry.captureMessage(`Cloud Function (getDisplayName) not authorized | uid: ${context.auth.uid}`)
     return {
       error: 'Request not authorized'
     }
